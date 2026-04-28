@@ -1,0 +1,16 @@
+[
+  {
+    "name": "MiKvmDePrueba",
+    "encrypted": false,
+    "entry": [
+      {
+        "name": "url_backend",
+        "value": "https://httpbin.org/get"
+      },
+      {
+        "name": "token_secreto",
+        "value": "12345-abcde-secreto-local"
+      }
+    ]
+  }
+]

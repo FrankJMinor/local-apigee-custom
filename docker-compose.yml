@@ -12,4 +12,4 @@ services:
       # Configuración de credenciales solicitadas
       - APIGEE_USER=test
       - APIGEE_PASSWORD=test
-    restart: always
+    restart: always+

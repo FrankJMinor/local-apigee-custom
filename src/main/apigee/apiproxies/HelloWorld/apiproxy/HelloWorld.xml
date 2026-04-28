@@ -1,0 +1,6 @@
+<APIProxy name="HelloWorld">
+    <Basepaths>/hello</Basepaths>
+    <ProxyEndpoints>
+        <ProxyEndpoint>default</ProxyEndpoint>
+    </ProxyEndpoints>
+</APIProxy>

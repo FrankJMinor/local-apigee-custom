@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<KeyValueMapOperations async="false" continueOnError="false" enabled="true" name="GetKVM">
+    <DisplayName>GetKVM</DisplayName>
+    <Properties />
+    <Get assignTo="variable_guardada">
+        <Key>
+            <Parameter>token_secreto</Parameter>
+        </Key>
+    </Get>
+
+    <Scope>environment</Scope>
+</KeyValueMapOperations>
