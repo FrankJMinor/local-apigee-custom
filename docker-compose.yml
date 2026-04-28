@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  apigee-emulator:
+    image: gcr.io/apigee-release/hybrid/apigee-emulator:1.9.2
+    container_name: apigee-emulator-local
+    ports:
+      # Mapeo según la arquitectura definida:
+      - "8081:8080"  # Tráfico de APIs (Host:Container)
+      - "8999:8998"  # Puerto de Control/Management (Host:Container)
+    environment:
+      # Configuración de credenciales solicitadas
+      - APIGEE_USER=test
+      - APIGEE_PASSWORD=test
+    restart: always
