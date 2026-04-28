@@ -1,5 +1,0 @@
-<TargetEndpoint name="backend">
-  <HTTPTargetConnection>
-    <URL>https://google.com</URL>
-  </HTTPTargetConnection>
-</TargetEndpoint>
