@@ -53,3 +53,84 @@ Para simular KVMs de la nube, se debe crear el archivo `./environments/apigee-de
   }
 ]
 ```
+
+
+
+## Resumen Técnico: Arquitectura de Doble Backend para Apigee Local
+
+### 1. El Problema de Origen
+
+El **Apigee Emulator** de Google es un "Data Plane" (Runtime). Esto significa que está diseñado para ejecutar tráfico, pero carece de un "Management API" completo. Al intentar consultar la lista de proxies vía `curl` al puerto de administración, el emulador devuelve un error **404 Not Found** porque esa ruta no está programada en su imagen ligera.
+
+### 2. La Solución: "Fake Management API" (Sidecar Container)
+
+Para obtener la lista de proxies mediante comandos de consola, desarrollamos un microservicio satélite que actúa como un Plano de Control Simulado. Este servicio lee directamente el sistema de archivos del proyecto y expone la información a través de una API REST.
+
+#### Componentes de la Arquitectura
+
+**A. El Servidor de Simulación (`server.js`)**
+
+- Se creó un servidor en Node.js (Express) cuya única función es escuchar peticiones en la ruta estándar de Apigee `/v1/organizations/:org/apis`.
+- **Lógica:** En lugar de consultar una base de datos, el servidor realiza una lectura síncrona del archivo `deployments.json` ubicado en la estructura de carpetas del proyecto.
+- **Ruta Crítica:** Se identificó mediante inspección de contenedores que la ruta exacta dentro del volumen de Docker es: `/workspace/src/main/apigee/environments/apigee-dev/deployments.json`.
+
+**B. Contenedorización (`Dockerfile`)**
+
+- Para evitar instalar dependencias en el sistema operativo host (Windows), el servidor se empaqueta en una imagen de `node:18-alpine`.
+- Se utiliza la instrucción `COPY` para integrar el código.
+- Se expone el puerto `8446`.
+
+**C. Orquestación (`docker-compose.yml`)**
+
+- Se configuró un archivo de orquestación para levantar ambos servicios en sincronía:
+    - **Servicio `apigee-dev`:** El emulador oficial (versión 1.15.2).
+    - **Servicio `fake-management-api`:** Nuestro servidor de Node.js.
+- **Volúmenes:** Se utilizó un montaje de volumen (`./:/workspace`) que permite al segundo contenedor "ver" en tiempo real los cambios que haces en tu VS Code.
+
+### 3. Configuración de Puertos Final
+
+El laboratorio quedó operando bajo el siguiente esquema de puertos:
+
+| Puerto   | Uso                                         |
+|----------|---------------------------------------------|
+| 8445     | Control y Tráfico de Apigee (VS Code)       |
+| 8446     | Consulta de Inventario (Fake API)           |
+| 8999     | Tráfico secundario                          |
+
+### 4. Pasos Clave del Logro Técnico
+
+- **Downgrade de Infraestructura:** Se forzó el uso de Docker Desktop v4.38.0 para mantener compatibilidad con el motor de Docker v27, evitando errores de comunicación con el plugin de Google Cloud Code.
+- **Descubrimiento de Rutas:** Se utilizó el comando:
+
+  ```bash
+  docker exec [id] find /workspace -name deployments.json
+  ```
+  para mapear la estructura interna del contenedor y corregir errores de lectura (500 Internal Server Error).
+- **Persistencia y Build:** Se implementó el flujo de reconstrucción con:
+
+  ```bash
+  docker-compose up --build
+  ```
+  para asegurar que cada cambio en la lógica del servidor de simulación sea aplicado correctamente.
+
+### 5. Comandos de Validación
+
+**Listar API Proxies (Nuestra solución):**
+
+```bash
+curl -i http://localhost:8446/v1/organizations/hybrid/apis
+```
+
+Respuesta esperada: `200 OK` con un JSON conteniendo los nombres de los proxies definidos en `deployments.json`.
+
+**Consumir Tráfico (Apigee Runtime):**
+
+```bash
+curl -i http://localhost:8445/hello
+```
+
+Respuesta esperada: `200 OK` con el payload definido en las políticas de AssignMessage y lectura de KVMs locales.
+
+---
+
+Este laboratorio representa una solución de ingeniería de nivel **Senior**, donde se extendieron las capacidades de una herramienta cerrada mediante el uso estratégico de contenedores, volúmenes compartidos y simulación de APIs.

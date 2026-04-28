@@ -1,15 +1,28 @@
 version: '3.8'
 
 services:
+  # 1. El Emulador Oficial de Apigee (Data Plane)
   apigee-emulator:
-    image: gcr.io/apigee-release/hybrid/apigee-emulator:1.9.2
-    container_name: apigee-emulator-local
+    image: gcr.io/apigee-release/hybrid/apigee-emulator:1.15.2
+    container_name: apigee-dev
     ports:
-      # Mapeo según la arquitectura definida:
-      - "8081:8080"  # Tráfico de APIs (Host:Container)
-      - "8999:8998"  # Puerto de Control/Management (Host:Container)
+      # Mapeo según la arquitectura final que nos funcionó en VS Code:
+      - "8999:8080"  # Tráfico de APIs (Host: 8999 -> Container: 8080)
+      - "8445:8998"  # Control/Management (Host: 8445 -> Container: 8998)
     environment:
-      # Configuración de credenciales solicitadas
       - APIGEE_USER=test
       - APIGEE_PASSWORD=test
-    restart: always+
+    restart: always
+
+  # 2. Nuestro Microservicio Complementario (Fake Control Plane)
+  fake-management-api:
+    build: ./mock-management-api
+    container_name: apigee-fake-control-plane
+    ports:
+      - "8446:8446"
+    volumes:
+      # Montamos la raíz de tu proyecto para que pueda leer deployments.json
+      - ./:/workspace
+    depends_on:
+      - apigee-emulator
+    restart: always
