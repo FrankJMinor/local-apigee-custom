@@ -1,15 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { StatusBadge } from '../components/StatusBadge'
+import { TagChip } from '../components/TagChip'
 import { IconRefresh, IconRocket } from '../components/Icons'
-import { formatDate, tagColor } from '../utils/format'
+import { formatDate } from '../utils/format'
+import { getDotColor, isErrorState } from '../utils/states'
 import s from './table.module.css'
 
 const API_URL = '/v1/organizations/americamovil/apis'
-
-const DOT_COLORS = {
-  deployed: '#22c55e', undeployed: '#94a3b8',
-  pending: '#f59e0b', error: '#ef4444',
-}
 
 function parseProxies(data) {
   const proxies = data.aPIProxy || data
@@ -30,31 +27,13 @@ function parseProxies(data) {
   return out
 }
 
-function TagChip({ tag }) { // NOSONAR S6774
-  const color = tagColor(tag)
-  return (
-    <span style={{
-      display: 'inline-block',
-      padding: '2px 9px',
-      borderRadius: '10px',
-      fontSize: '0.78em',
-      fontWeight: 600,
-      background: `${color}22`,
-      color,
-      border: `1px solid ${color}44`,
-    }}>
-      {tag}
-    </span>
-  )
-}
-
 function ApiProxies() {
   const [rows, setRows]       = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
   const [search, setSearch]   = useState('')
 
-  function load() {
+  const load = useCallback(() => {
     setLoading(true)
     setError(null)
     fetch(API_URL)
@@ -62,17 +41,15 @@ function ApiProxies() {
       .then(d => setRows(parseProxies(d)))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
-  }
+  }, [])
 
-  useEffect(load, [])
+  useEffect(load, [load])
 
+  const searchLower = search.toLowerCase()
   const filtered = rows.filter(r =>
     [r.name, r.revision, r.state, r.basePath, ...r.tags].join(' ')
-      .toLowerCase().includes(search.toLowerCase())
+      .toLowerCase().includes(searchLower)
   )
-
-  const dotColor = state => DOT_COLORS[(state || '').toLowerCase()] || '#94a3b8'
-  const isError  = state => (state || '').toLowerCase() === 'error'
 
   return (
     <div>
@@ -128,7 +105,7 @@ function ApiProxies() {
                   <tr key={`${row.name}-${row.revision}`}>
                     <td>
                       <span className={s.nameCell}>
-                        <span className={s.dot} style={{ background: dotColor(row.state) }} />
+                        <span className={s.dot} style={{ background: getDotColor(row.state) }} />
                         <span className={s.itemName}>{row.name}</span>
                       </span>
                     </td>
@@ -144,8 +121,8 @@ function ApiProxies() {
                     <td className={s.dateCell}>{formatDate(row.lastModified)}</td>
                     <td>
                       <button
-                        className={`${s.deployBtn} ${isError(row.state) ? s.deployBtnDisabled : ''}`}
-                        disabled={isError(row.state)}
+                        className={`${s.deployBtn} ${isErrorState(row.state) ? s.deployBtnDisabled : ''}`}
+                        disabled={isErrorState(row.state)}
                         onClick={() => alert(`Desplegando ${row.name}…`)}
                       >
                         <IconRocket size={13} /> Desplegar

@@ -8,9 +8,9 @@ import s from './table.module.css'
 function KeyValueMaps() {
   const [search, setSearch] = useState('')
 
+  const searchLower = search.toLowerCase()
   const filtered = KEY_VALUE_MAPS.filter(r =>
-    [r.name, r.scope, r.encrypted ? 'si' : 'no'].join(' ')
-      .toLowerCase().includes(search.toLowerCase())
+    [r.name, r.scope, r.encrypted ? 'si' : 'no'].join(' ').toLowerCase().includes(searchLower)
   )
 
   return (

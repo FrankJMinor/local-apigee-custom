@@ -3,23 +3,16 @@ import { SHARED_FLOWS } from '../data/mock'
 import { StatusBadge } from '../components/StatusBadge'
 import { IconRefresh, IconRocket } from '../components/Icons'
 import { formatDate } from '../utils/format'
+import { getDotColor, isErrorState } from '../utils/states'
 import s from './table.module.css'
-
-const DOT_COLORS = {
-  deployed: '#22c55e', undeployed: '#94a3b8',
-  pending: '#f59e0b', error: '#ef4444',
-}
 
 function SharedFlows() {
   const [search, setSearch] = useState('')
 
+  const searchLower = search.toLowerCase()
   const filtered = SHARED_FLOWS.filter(r =>
-    [r.name, r.revision, r.state].join(' ')
-      .toLowerCase().includes(search.toLowerCase())
+    [r.name, r.revision, r.state].join(' ').toLowerCase().includes(searchLower)
   )
-
-  const dotColor = state => DOT_COLORS[(state || '').toLowerCase()] || '#94a3b8'
-  const isError  = state => (state || '').toLowerCase() === 'error'
 
   return (
     <div>
@@ -69,7 +62,7 @@ function SharedFlows() {
                 <tr key={row.name}>
                   <td>
                     <span className={s.nameCell}>
-                      <span className={s.dot} style={{ background: dotColor(row.state) }} />
+                      <span className={s.dot} style={{ background: getDotColor(row.state) }} />
                       <span className={s.itemName}>{row.name}</span>
                     </span>
                   </td>
@@ -81,8 +74,8 @@ function SharedFlows() {
                   <td className={s.dateCell}>{formatDate(row.lastModified)}</td>
                   <td>
                     <button
-                      className={`${s.deployBtn} ${isError(row.state) ? s.deployBtnDisabled : ''}`}
-                      disabled={isError(row.state)}
+                      className={`${s.deployBtn} ${isErrorState(row.state) ? s.deployBtnDisabled : ''}`}
+                      disabled={isErrorState(row.state)}
                       onClick={() => alert(`Desplegando ${row.name}…`)}
                     >
                       <IconRocket size={13} /> Desplegar

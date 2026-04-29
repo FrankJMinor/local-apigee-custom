@@ -1,13 +1,12 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { STATS, RECENT_ACTIVITY, SYSTEM_ALERTS } from '../data/mock'
 import { timeAgo } from '../utils/format'
 import { IconActivity, IconAlert, IconRefresh } from '../components/Icons'
+import s from './table.module.css'
 import styles from './Dashboard.module.css'
 
-const STAT_ICONS = ['⊞', '⚡', '☰']
-const STAT_COLORS = ['#3b82f6', '#8b5cf6', '#10b981']
-
-function StatCard({ stat, index }) { // NOSONAR S6774
+function StatCard({ stat }) { // NOSONAR S6774
   return (
     <Link to={stat.path} className={styles.statCard}>
       <div className={styles.statTop}>
@@ -17,9 +16,9 @@ function StatCard({ stat, index }) { // NOSONAR S6774
         </div>
         <span
           className={styles.statIcon}
-          style={{ background: STAT_COLORS[index] + '22', color: STAT_COLORS[index] }}
+          style={{ background: `${stat.color}22`, color: stat.color }}
         >
-          {STAT_ICONS[index]}
+          {stat.icon}
         </span>
       </div>
       <p className={styles.statDelta}>↗ {stat.delta}</p>
@@ -28,38 +27,36 @@ function StatCard({ stat, index }) { // NOSONAR S6774
 }
 
 function Dashboard() {
+  const [, forceRefresh] = useState(0)
+
   return (
     <div>
-      {/* Page header */}
-      <div className={styles.pageHeader}>
+      <div className={s.pageHeader}>
         <div>
-          <h1 className={styles.pageTitle}>Dashboard</h1>
-          <p className={styles.pageSub}>Vista general de tu entorno de API Management.</p>
+          <h1 className={s.pageTitle}>Dashboard</h1>
+          <p className={s.pageSub}>Vista general de tu entorno de API Management.</p>
         </div>
-        <div className={styles.pageActions}>
-          <button className={styles.btnSecondary} onClick={() => window.location.reload()}>
+        <div className={s.pageActions}>
+          <button className={s.btnSecondary} onClick={() => forceRefresh(n => n + 1)}>
             <IconRefresh size={15} /> Actualizar
           </button>
-          <button className={styles.btnPrimary}>+ Nuevo Proxy</button>
+          <button className={s.btnPrimary}>+ Nuevo Proxy</button>
         </div>
       </div>
 
-      {/* Stat cards */}
       <div className={styles.statsRow}>
-        {STATS.map((s, i) => <StatCard key={s.label} stat={s} index={i} />)}
+        {STATS.map(stat => <StatCard key={stat.label} stat={stat} />)}
       </div>
 
-      {/* Bottom panels */}
       <div className={styles.panels}>
-        {/* Recent activity */}
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
             <IconActivity size={17} />
             <h2 className={styles.panelTitle}>Actividad Reciente</h2>
           </div>
           <ul className={styles.activityList}>
-            {RECENT_ACTIVITY.map((item, i) => (
-              <li key={i} className={styles.activityItem}>
+            {RECENT_ACTIVITY.map(item => (
+              <li key={item.action} className={styles.activityItem}>
                 <span className={styles.activityDot} />
                 <div>
                   <p className={styles.activityAction}>{item.action}</p>
@@ -70,16 +67,15 @@ function Dashboard() {
           </ul>
         </div>
 
-        {/* System alerts */}
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
             <IconAlert size={17} />
             <h2 className={styles.panelTitle}>Alertas del Sistema</h2>
           </div>
           <div className={styles.alertList}>
-            {SYSTEM_ALERTS.map((a, i) => (
+            {SYSTEM_ALERTS.map(a => (
               <div
-                key={i}
+                key={a.title}
                 className={`${styles.alert} ${a.type === 'warning' ? styles.alertWarning : styles.alertInfo}`}
               >
                 <p className={styles.alertTitle}>{a.title}</p>

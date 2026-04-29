@@ -30,7 +30,7 @@ export const SYSTEM_ALERTS = [
 ]
 
 export const STATS = [
-  { label: 'API Proxies',      value: 7, delta: '+2 este mes', path: '/proxies' },
-  { label: 'Shared Flows',     value: 6, delta: '+1 este mes', path: '/shared-flows' },
-  { label: 'Key Value Maps',   value: 7, delta: 'Sin cambios', path: '/kvm' },
+  { label: 'API Proxies',    value: 7, delta: '+2 este mes', path: '/proxies',      color: '#3b82f6', icon: '⊞' },
+  { label: 'Shared Flows',   value: 6, delta: '+1 este mes', path: '/shared-flows', color: '#8b5cf6', icon: '⚡' },
+  { label: 'Key Value Maps', value: 7, delta: 'Sin cambios', path: '/kvm',          color: '#10b981', icon: '☰' },
 ]
