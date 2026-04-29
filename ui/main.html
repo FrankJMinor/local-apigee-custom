@@ -1,24 +1,70 @@
-<div class="overflow-x-auto shadow-md sm:rounded-lg">
-  <table class="w-full text-sm text-left text-gray-500">
-    <thead class="text-xs text-gray-700 uppercase bg-gray-50 border-b">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Apigee Proxies</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    th { background: #f2f2f2; }
+    .btn { background: #009fe3; color: #fff; border: none; padding: 10px 20px; cursor: pointer; float: right; }
+    .btn:hover { background: #007bb5; }
+    .header { display: flex; justify-content: space-between; align-items: center; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>API Proxies</h2>
+    <button class="btn" onclick="alert('Funcionalidad no implementada')">+ Proxy</button>
+  </div>
+  <table id="proxiesTable">
+    <thead>
       <tr>
-        <th class="px-6 py-3">API Proxy</th>
-        <th class="px-6 py-3">Environments</th>
-        <th class="px-6 py-3">Traffic (24h)</th>
-        <th class="px-6 py-3">Modified</th>
-        <th class="px-6 py-3">Actions</th>
+        <th>Nombre</th>
+        <th>Revisión</th>
+        <th>Estado</th>
+        <th>Servidor</th>
+        <th>Status Servidor</th>
+        <th>BasePath</th>
       </tr>
     </thead>
     <tbody>
-      <tr class="bg-white border-b hover:bg-gray-50">
-        <td class="px-6 py-4 font-medium text-blue-600">customer-profile-v1</td>
-        <td class="px-6 py-4">test</td>
-        <td class="px-6 py-4">1,572</td>
-        <td class="px-6 py-4 text-xs text-gray-400">2 hours ago</td>
-        <td class="px-6 py-4">
-            <button class="text-gray-400 hover:text-red-600">Delete</button>
-        </td>
-      </tr>
+      <!-- Aquí se llenan los datos -->
     </tbody>
   </table>
-</div>
+  <script>
+    fetch('http://localhost:8446/v1/organizations/americamovil/apis')
+      .then(res => res.json())
+      .then(data => {
+        const tbody = document.querySelector('#proxiesTable tbody');
+        tbody.innerHTML = '';
+        // Si el response es el mock completo, accede a data.aPIProxy
+        const proxies = data.aPIProxy || data;
+        proxies.forEach(proxy => {
+          const proxyName = proxy.name?.name || '-';
+          (proxy.revision || []).forEach(rev => {
+            const revision = rev.name || '-';
+            const state = rev.state || '-';
+            const server = rev.server && rev.server[0] ? rev.server[0].pod?.name || '-' : '-';
+            const serverStatus = rev.server && rev.server[0] ? rev.server[0].status || '-' : '-';
+            const basePath = rev.configuration?.basePath || '-';
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td>${proxyName}</td>
+              <td>${revision}</td>
+              <td>${state}</td>
+              <td>${server}</td>
+              <td>${serverStatus}</td>
+              <td>${basePath}</td>
+            `;
+            tbody.appendChild(row);
+          });
+        });
+      })
+      .catch(err => {
+        document.querySelector('#proxiesTable tbody').innerHTML = `<tr><td colspan="6">Error cargando datos</td></tr>`;
+      });
+  </script>
+</body>
+</html>

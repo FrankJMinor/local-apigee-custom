@@ -1,0 +1,49 @@
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-page);
+  transition: background 0.25s;
+}
+
+.topBar {
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 0 1.4em;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  transition: background 0.25s, border-color 0.25s;
+}
+
+.iconBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 1em;
+  transition: background 0.15s;
+}
+.iconBtn:hover {
+  background: var(--bg-th);
+}
+
+.content {
+  flex: 1;
+  padding: 2em 2.2em;
+}

@@ -1,0 +1,200 @@
+/* Shared styles for all table pages */
+
+/* ── Page header ── */
+.pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.6em;
+  flex-wrap: wrap;
+  gap: 1em;
+}
+.pageTitle {
+  font-size: 1.6em;
+  font-weight: 700;
+  color: var(--text-title);
+  margin-bottom: 0.15em;
+}
+.pageSub {
+  font-size: 0.88em;
+  color: var(--text-muted);
+}
+.pageActions {
+  display: flex;
+  gap: 0.7em;
+  align-items: center;
+}
+.btnSecondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 0.87em;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btnSecondary:hover { background: var(--bg-th); }
+.btnPrimary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 8px;
+  background: var(--text-title);
+  color: #fff;
+  font-size: 0.87em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.btnPrimary:hover { opacity: 0.85; }
+
+/* ── Table card ── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: background 0.25s, border-color 0.25s;
+}
+
+/* ── Search/count bar ── */
+.tableBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.9em 1.2em;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 0.8em;
+}
+.searchWrap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  background: var(--bg-card);
+  min-width: 280px;
+  transition: border-color 0.2s;
+}
+.searchWrap:focus-within { border-color: var(--accent); }
+.searchIcon { font-size: 0.82em; opacity: 0.45; }
+.searchInput {
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.88em;
+  width: 100%;
+}
+.countLabel {
+  font-size: 0.84em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ── Table ── */
+.tableWrapper { overflow-x: auto; }
+.table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9em;
+}
+.table thead tr { border-bottom: 1px solid var(--border); }
+.table th {
+  padding: 10px 16px;
+  text-align: left;
+  font-size: 0.78em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  white-space: nowrap;
+}
+.table td {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+.table tbody tr:last-child td { border-bottom: none; }
+.table tbody tr:hover td { background: var(--bg-row-hover); }
+
+/* ── Common cell types ── */
+.nameCell {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.itemName { font-weight: 500; }
+.revBadge {
+  display: inline-block;
+  font-size: 0.82em;
+  font-weight: 600;
+  font-family: monospace;
+  background: var(--bg-th);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 2px 8px;
+  color: var(--text-secondary);
+}
+.dateCell {
+  font-size: 0.87em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* ── Action buttons ── */
+.deployBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--text-title);
+  color: #fff;
+  font-size: 0.83em;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.deployBtn:hover:not(:disabled) { opacity: 0.82; }
+.deployBtnDisabled {
+  background: var(--bg-th);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+}
+.iconAction {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  transition: background 0.15s, color 0.15s;
+}
+.iconAction:hover { background: var(--bg-th); color: var(--text-primary); }
+.iconActionDanger:hover { color: #ef4444; background: #fef2f2; }
+
+/* ── Empty ── */
+.empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 3em 0;
+}

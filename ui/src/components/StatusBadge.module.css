@@ -1,0 +1,30 @@
+/* ── Status badges ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 11px;
+  border-radius: 20px;
+  font-size: 0.8em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.icon { font-size: 0.9em; line-height: 1; }
+
+.v_solid   { background: var(--text-title); color: #fff; }
+.v_outline { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+.v_pending { background: transparent; color: #d97706; border: 1px solid #d9770655; }
+.v_error   { background: #ef4444; color: #fff; }
+
+/* ── Scope badges ── */
+.scope {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 5px;
+  font-size: 0.78em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.s_org   { background: var(--text-title); color: #fff; }
+.s_env   { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+.s_proxy { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
