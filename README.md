@@ -21,33 +21,33 @@ Es obligatorio retroceder a una versión que utilice el **Docker Engine v27.x** 
     2. Instalar el ejecutable `v4.38.0`.
     3. **IMPORTANTE:** Ir a *Settings > General* y desmarcar la casilla **"Automatically check for updates"**. Esto evita que el sistema regrese a la versión 29 automáticamente.
 
-![alt text]({226AC8FF-0DE8-410F-AE0F-9DBA6E2D1ABE}.png)
+![alt text](images/{226AC8FF-0DE8-410F-AE0F-9DBA6E2D1ABE}.png)
 
 ### 2. Configuración de VS Code y Emulador
 1. En la extensión **Google Cloud Code**, sección de Apigee, abrir *Settings*.
 
-    ![alt text]({25F879C5-DB43-4BE1-A2C9-618F7027D7C2}.png)
+    ![alt text](images/{25F879C5-DB43-4BE1-A2C9-618F7027D7C2}.png)
 
 2. En `Apigee: Emulators`, añadir el tag: **`1.15.2`**.
 
 Nota: Para agregar una versión especifica en windows seleccionar ctrl + , y agregamos la versión deseada.
 
 
-![alt text]({C9D0D623-F0F1-4D20-9A16-DBB465D02560}.png)
+![alt text](images/{C9D0D623-F0F1-4D20-9A16-DBB465D02560}.png)
 
 3. Iniciar el emulador y asignar los siguientes puertos para evitar colisiones (o los que prefiera el usuario):
     * **Traffic Port:** `8999` (Puerto para consumir APIs).
     * **Control Port:** `8445` (Puerto para administración/despliegue).
 
-      ![Desacarga manual]({560D9023-80AB-498B-8580-5C7D098B8243}.png)
+      ![Desacarga manual](images/{560D9023-80AB-498B-8580-5C7D098B8243}.png)
 
-      ![Nombre del contenedor]({032B59B0-6284-4B5F-B1AD-0979B53DD011}.png)
+      ![Nombre del contenedor](images/{032B59B0-6284-4B5F-B1AD-0979B53DD011}.png)
 
-      ![Selección de puerto de salida]({364F4131-761C-48B6-9838-C69798544C08}.png)
+      ![Selección de puerto de salida](images/{364F4131-761C-48B6-9838-C69798544C08}.png)
 
-      ![selección del puerto de apigee]({46427D77-838C-4297-B52C-6369DFF300C3}.png)
+      ![selección del puerto de apigee](images/{46427D77-838C-4297-B52C-6369DFF300C3}.png)
 
-      ![proceso de instalación]({B3D0DD9B-5CEE-480B-BAA7-2CEF81B7C187}.png)
+      ![proceso de instalación](images/{B3D0DD9B-5CEE-480B-BAA7-2CEF81B7C187}.png)
 
 ## 📂 Configuración del Entorno Local
 
@@ -179,4 +179,4 @@ Este laboratorio representa una solución de ingeniería de nivel **Senior**, do
 
 A continuación se detalla un diagrama para complementar el emulador de Apigee
 
-![alt text](<Arquitectura complementaria.png>)
+![alt text](images/Arquitectura%20complementaria.png)
