@@ -1,5 +1,12 @@
 # Apigee Emulator
 
+![Status](https://img.shields.io/badge/status-preview-yellow)
+![Version](https://img.shields.io/badge/version-0.3.0-blue)
+![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11-3776ab?logo=python&logoColor=white)
+![React](https://img.shields.io/badge/react-v18-61dafb?logo=react&logoColor=black)
+![Docker](https://img.shields.io/badge/docker-v4.38.0-2496ed?logo=docker&logoColor=white)
+![Apigee Emulator](https://img.shields.io/badge/Apigee%20Emulator-v1.15.2-4285F4?logo=google-cloud&logoColor=white)
+
 Este repositorio contiene una detalla solución técnica para implementar un entorno de desarrollo local de Apigee utilizando **Cloud Code** en VS Code, resolviendo específicamente los conflictos de comunicación con Docker y la gestión de recursos locales.
 
 ## Diagnóstico del Error Principal

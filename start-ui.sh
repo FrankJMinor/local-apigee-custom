@@ -10,4 +10,4 @@ if [ ! -d "node_modules" ]; then
 fi
 
 echo "Iniciando servidor de desarrollo..."
-npm run dev
+npm run dev -- --host
