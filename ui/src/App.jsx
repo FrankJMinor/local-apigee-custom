@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import Dashboard    from './pages/Dashboard'
 import ApiProxies   from './pages/ApiProxies'
+import ProxyDetailPage from './pages/ProxyDetailPage'
 import SharedFlows  from './pages/SharedFlows'
 import KeyValueMaps from './pages/KeyValueMaps'
 import Configuracion  from './pages/Configuracion'
@@ -21,6 +22,7 @@ function App() {
       <Routes>
         <Route path="/"             element={<Dashboard />} />
         <Route path="/proxies"      element={<ApiProxies />} />
+        <Route path="/proxies/:proxyName" element={<ProxyDetailPage />} />
         <Route path="/shared-flows" element={<SharedFlows />} />
         <Route path="/kvm"          element={<KeyValueMaps />} />
         <Route path="/config"       element={<Configuracion />} />

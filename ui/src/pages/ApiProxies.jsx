@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { StatusBadge } from '../components/StatusBadge'
 import { TagChip } from '../components/TagChip'
 import { IconRefresh, IconRocket } from '../components/Icons'
@@ -32,6 +33,7 @@ function ApiProxies() {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
   const [search, setSearch]   = useState('')
+  const navigate = useNavigate();
 
   const load = useCallback(() => {
     setLoading(true)
@@ -50,6 +52,8 @@ function ApiProxies() {
     [r.name, r.revision, r.state, r.basePath, ...r.tags].join(' ')
       .toLowerCase().includes(searchLower)
   )
+
+
 
   return (
     <div>
@@ -106,7 +110,13 @@ function ApiProxies() {
                     <td>
                       <span className={s.nameCell}>
                         <span className={s.dot} style={{ background: getDotColor(row.state) }} />
-                        <span className={s.itemName}>{row.name}</span>
+                        <button
+                          className={s.itemName}
+                          style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                          onClick={() => navigate(`/proxies/${encodeURIComponent(row.name)}`)}
+                        >
+                          {row.name}
+                        </button>
                       </span>
                     </td>
                     <td><span className={s.revBadge}>v{row.revision}</span></td>
@@ -135,6 +145,7 @@ function ApiProxies() {
           </div>
         )}
       </div>
+
     </div>
   )
 }
