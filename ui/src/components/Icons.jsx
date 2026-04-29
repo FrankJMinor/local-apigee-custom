@@ -47,6 +47,27 @@ export function IconActivity({ size }) {
 export function IconAlert({ size }) {
   return <Svg size={size}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></Svg>
 }
+export function IconTrace({ size }) {
+  return <Svg size={size}><path d="M2 12h3l3-9 4 18 3-9h3"/><circle cx="19" cy="12" r="3"/></Svg>
+}
+export function IconUpload({ size }) {
+  return <Svg size={size}><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></Svg>
+}
+export function IconChevronRight({ size }) {
+  return <Svg size={size}><polyline points="9 18 15 12 9 6"/></Svg>
+}
+export function IconX({ size }) {
+  return <Svg size={size}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></Svg>
+}
+export function IconWarning({ size }) {
+  return <Svg size={size}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></Svg>
+}
+export function IconCheck({ size }) {
+  return <Svg size={size}><polyline points="20 6 9 17 4 12"/></Svg>
+}
+export function IconInfo({ size }) {
+  return <Svg size={size}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></Svg>
+}
 export function IconLogo({ size = 34 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 34 34" fill="none">

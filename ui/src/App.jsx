@@ -5,7 +5,8 @@ import Dashboard    from './pages/Dashboard'
 import ApiProxies   from './pages/ApiProxies'
 import SharedFlows  from './pages/SharedFlows'
 import KeyValueMaps from './pages/KeyValueMaps'
-import Configuracion from './pages/Configuracion'
+import Configuracion  from './pages/Configuracion'
+import TraceAnalyzer  from './pages/TraceAnalyzer'
 
 function App() {
   const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark')
@@ -23,6 +24,7 @@ function App() {
         <Route path="/shared-flows" element={<SharedFlows />} />
         <Route path="/kvm"          element={<KeyValueMaps />} />
         <Route path="/config"       element={<Configuracion />} />
+        <Route path="/trace"        element={<TraceAnalyzer />} />
         <Route path="*"             element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
