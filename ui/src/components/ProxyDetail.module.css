@@ -362,6 +362,75 @@
   color: var(--text-muted);
 }
 
+/* ── Gas Flow Connection ────────────────────────────────────────────────── */
+.flowLink {
+  position: relative;
+  width: 90px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 0 15px rgba(0, 242, 255, 0.1); /* Brillo neón base */
+}
+
+.gasEffect {
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(
+    90deg, 
+    transparent, 
+    rgba(0, 242, 255, 0.2), 
+    rgba(0, 242, 255, 0.5), 
+    rgba(0, 242, 255, 0.2), 
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: gasMove 2.5s infinite linear;
+  filter: blur(6px); /* Más desenfoque para efecto humo */
+}
+
+.flowArrows {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='20' height='12' viewBox='0 0 20 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M8 3L11 6L8 9' stroke='rgba(0,242,255,0.6)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  animation: arrowMove 1.5s infinite linear;
+  opacity: 0.8;
+}
+
+@keyframes gasMove {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes arrowMove {
+  from { background-position: 0 0; }
+  to { background-position: 40px 0; }
+}
+
+/* Response Flow (Sentido opuesto y humo neón invertido) */
+.reverseFlow {
+  transform: scaleX(-1); /* Invierte las flechas y el movimiento */
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.1); /* Tinte verde neón para respuesta si prefieres */
+}
+
+.reverseFlow .gasEffect {
+  background: linear-gradient(
+    90deg, 
+    transparent, 
+    rgba(16, 185, 129, 0.2), 
+    rgba(16, 185, 129, 0.5), 
+    rgba(16, 185, 129, 0.2), 
+    transparent
+  );
+}
+
+.reverseFlow .flowArrows {
+  background-image: url("data:image/svg+xml,%3Csvg width='20' height='12' viewBox='0 0 20 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M8 3L11 6L8 9' stroke='rgba(16,185,129,0.7)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
 .stepLabel {
   font-size: 0.75rem;
   color: var(--text-secondary);
@@ -376,9 +445,10 @@
 .policyTraffic { border-color: rgba(34, 197, 94, 0.4); }
 
 .activeStep .stepIcon {
-  background: rgba(var(--accent-rgb, 59, 130, 246), 0.1);
+  background: rgba(var(--accent-rgb, 59, 130, 246), 0.15);
   border-color: var(--accent);
-  box-shadow: 0 0 20px rgba(var(--accent-rgb, 59, 130, 246), 0.3), inset 0 0 10px rgba(var(--accent-rgb, 59, 130, 246), 0.2);
+  /* Eliminados los brillos/rayos exagerados */
+  box-shadow: inset 0 0 10px rgba(var(--accent-rgb, 59, 130, 246), 0.1);
 }
 
 .activeStep .stepLabel {
@@ -729,4 +799,20 @@
 
 .collapseToggle:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+/* Para el Project Explorer (apagado) */
+.sidebarIcon {
+  stroke: #00D1FF;
+  color: #00D1FF;
+  filter: none;
+  opacity: 0.7;
+}
+
+/* Para el Visualizador (encendido) */
+.canvasNodeIcon {
+  stroke: #00D1FF;
+  color: #00D1FF;
+  filter: url(#neonGlowIcon);
+  opacity: 1;
 }

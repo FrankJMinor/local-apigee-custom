@@ -2,21 +2,60 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { 
   IconRocket, IconRefresh, IconTrace, IconActivity, IconEdit, 
-  IconChevronRight, IconChevronDown, IconX, IconCheck
+  IconChevronRight, IconChevronDown, IconX, IconCheck, 
+  IconVerifyAPIKey, IconQuota, IconXMLJSON, IconSpikeArrest
 } from './Icons';
+import AssignMessageSVG from '../../icons/AssignMessage.svg';
+import KeyValueMapOperationsSVG from '../../icons/KeyValueMapOperations.svg';
 import styles from './ProxyDetail.module.css';
 
-// ── SUB-COMPONENT: VisualFlowCanvas ──────────────────────────────────────────
-const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy }) => {
-  const getPolicyTypeClass = (name) => {
-    const n = name.toLowerCase();
-    if (n.includes('verify') || n.includes('apikey') || n.includes('quota') || n.includes('security')) return styles.policySecurity;
-    if (n.includes('json') || n.includes('xml') || n.includes('transform') || n.includes('mediation')) return styles.policyMediation;
-    return styles.policyTraffic;
-  };
+// ── SUB-COMPONENT: NeonFilter ──────────────────────────────────────────────
+const NeonFilter = () => (
+  <svg width="0" height="0" style={{ position: 'absolute' }}>
+    <defs>
+      <filter id="neonGlowIcon" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
+        <feMerge>
+          <feMergeNode in="coloredBlur" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+    </defs>
+  </svg>
+);
 
+// ── UTILS ──────────────────────────────────────────────────────────────────
+const getPolicyTypeClass = (name) => {
+  const n = name.toLowerCase();
+  if (n.includes('verify') || n.includes('apikey') || n.includes('quota') || n.includes('security')) return styles.policySecurity;
+  if (n.includes('json') || n.includes('xml') || n.includes('transform') || n.includes('mediation')) return styles.policyMediation;
+  return styles.policyTraffic;
+};
+
+const getPolicyIcon = (type, className, size = 24) => {
+  const t = type || "";
+  if (t === 'AssignMessage') return <img src={AssignMessageSVG} className={className} style={{ width: size, height: size }} alt="AssignMessage" />;
+  if (t === 'KeyValueMapOperations') return <img src={KeyValueMapOperationsSVG} className={className} style={{ width: size, height: size }} alt="KeyValueMapOperations" />;
+  if (t === 'VerifyAPIKey') return <IconVerifyAPIKey size={size} className={className} />;
+  if (t === 'Quota') return <IconQuota size={size} className={className} />;
+  if (t === 'JSONToXML' || t === 'XMLToJSON') return <IconXMLJSON size={size} className={className} />;
+  if (t === 'SpikeArrest') return <IconSpikeArrest size={size} className={className} />;
+  
+  return <span className={className} style={{fontSize: size === 14 ? '12px' : '18px', display: 'inline-block', textAlign: 'center', width: `${size}px`}}>⚡</span>;
+};
+
+// ── SUB-COMPONENT: VisualFlowCanvas ──────────────────────────────────────────
+const FlowConnection = ({ reverse = false }) => (
+  <div className={`${styles.flowLink} ${reverse ? styles.reverseFlow : ''}`}>
+    <div className={styles.gasEffect}></div>
+    <div className={styles.flowArrows}></div>
+  </div>
+);
+
+const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy }) => {
   return (
     <main className={styles.flowDesigner}>
+      <NeonFilter />
       <div className={styles.flowContainer}>
         {/* Pipeline: Request */}
         <div className={styles.flowBox}>
@@ -26,17 +65,21 @@ const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy }) => {
               <div className={styles.stepIcon}>💻</div>
               <span className={styles.stepLabel}>App</span>
             </div>
-            <IconChevronRight size={18} className={styles.flowArrow}/>
+            
+            <FlowConnection />
             
             <div 
               className={`${styles.flowStep} ${selectedPolicy?.name === 'Verify-API-Key-1' ? styles.activeStep : ''}`}
               onClick={() => onSelectPolicy({ name: 'Verify-API-Key-1', type: 'Security' })}
             >
-              <div className={`${styles.stepIcon} ${getPolicyTypeClass('Verify')}`}>🛡️</div>
+              <div className={`${styles.stepIcon} ${getPolicyTypeClass('Verify')}`}>
+                {getPolicyIcon('VerifyAPIKey', styles.canvasNodeIcon)}
+              </div>
               <span className={styles.stepLabel}>Verify API Key</span>
             </div>
             
-            <IconChevronRight size={18} className={styles.flowArrow}/>
+            <FlowConnection />
+
             <div className={styles.flowStep}>
               <div className={styles.stepIcon}>☁️</div>
               <span className={styles.stepLabel}>Target</span>
@@ -52,17 +95,21 @@ const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy }) => {
               <div className={styles.stepIcon}>☁️</div>
               <span className={styles.stepLabel}>Target</span>
             </div>
-            <IconChevronRight size={18} className={styles.flowArrow}/>
+
+            <FlowConnection reverse />
             
             <div 
               className={`${styles.flowStep} ${selectedPolicy?.name === 'JSON-to-XML-1' ? styles.activeStep : ''}`}
               onClick={() => onSelectPolicy({ name: 'JSON-to-XML-1', type: 'Mediation' })}
             >
-              <div className={`${styles.stepIcon} ${getPolicyTypeClass('JSON')}`}>⚡</div>
+              <div className={`${styles.stepIcon} ${getPolicyTypeClass('JSON')}`}>
+                {getPolicyIcon('JSONToXML', styles.canvasNodeIcon)}
+              </div>
               <span className={styles.stepLabel}>JSON to XML</span>
             </div>
 
-            <IconChevronRight size={18} className={styles.flowArrow}/>
+            <FlowConnection reverse />
+
             <div className={styles.flowStep}>
               <div className={styles.stepIcon}>💻</div>
               <span className={styles.stepLabel}>App</span>
@@ -269,7 +316,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     
     // Si es una política, activamos el inspector (opcional, según lógica previa)
     if (file.path.includes('policies')) {
-      setSelectedPolicy({ name: file.name, type: 'Mediation' }); // Tipo genérico por ahora
+      setSelectedPolicy({ name: file.name, type: file.type || 'Mediation' });
       setIsInspectorOpen(true);
     }
 
@@ -376,16 +423,19 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             </div>
             {expanded.policies && (
               <div className={styles.treeSub}>
-                {fileTree?.policies?.map(policy => (
-                  <div 
-                    key={policy.path}
-                    className={`${styles.treeItem} ${selectedFile?.path === policy.path ? styles.activeTreeItem : ''}`}
-                    onClick={() => handleSelectFile(policy)}
-                  >
-                    <span className={styles.itemIcon}>⚡</span> {policy.name}
-                  </div>
-                ))}
-                {(!fileTree?.policies || fileTree.policies.length === 0) && (
+                {Array.isArray(fileTree?.policies) && fileTree.policies.length > 0 ? (
+                  fileTree.policies.map(policy => (
+                    <div 
+                      key={policy.path}
+                      className={`${styles.treeItem} ${selectedFile?.path === policy.path ? styles.activeTreeItem : ''}`}
+                      onClick={() => handleSelectFile(policy)}
+                    >
+                      <span className={styles.itemIcon}>
+                        {getPolicyIcon(policy.type, styles.sidebarIcon, 14)}
+                      </span> {policy.name}
+                    </div>
+                  ))
+                ) : (
                   <div className={styles.emptyTreeItem}>No policies</div>
                 )}
               </div>
@@ -398,15 +448,19 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             </div>
             {expanded.proxyEndpoints && (
               <div className={styles.treeSub}>
-                {fileTree?.proxy_endpoints?.map(endpoint => (
-                  <div 
-                    key={endpoint.path}
-                    className={`${styles.treeItem} ${selectedFile?.path === endpoint.path ? styles.activeTreeItem : ''}`}
-                    onClick={() => handleSelectFile(endpoint)}
-                  >
-                    <span className={styles.itemIcon}>⚙️</span> {endpoint.name}
-                  </div>
-                ))}
+                {Array.isArray(fileTree?.proxy_endpoints) && fileTree.proxy_endpoints.length > 0 ? (
+                  fileTree.proxy_endpoints.map(endpoint => (
+                    <div 
+                      key={endpoint.path}
+                      className={`${styles.treeItem} ${selectedFile?.path === endpoint.path ? styles.activeTreeItem : ''}`}
+                      onClick={() => handleSelectFile(endpoint)}
+                    >
+                      <span className={styles.itemIcon}>⚙️</span> {endpoint.name}
+                    </div>
+                  ))
+                ) : (
+                  <div className={styles.emptyTreeItem}>No proxy endpoints</div>
+                )}
               </div>
             )}
 
@@ -417,16 +471,17 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             </div>
             {expanded.targetEndpoints && (
               <div className={styles.treeSub}>
-                {fileTree?.target_endpoints?.map(target => (
-                  <div 
-                    key={target.path}
-                    className={`${styles.treeItem} ${selectedFile?.path === target.path ? styles.activeTreeItem : ''}`}
-                    onClick={() => handleSelectFile(target)}
-                  >
-                    <span className={styles.itemIcon}>🔗</span> {target.name}
-                  </div>
-                ))}
-                {(!fileTree?.target_endpoints || fileTree.target_endpoints.length === 0) && (
+                {Array.isArray(fileTree?.target_endpoints) && fileTree.target_endpoints.length > 0 ? (
+                  fileTree.target_endpoints.map(target => (
+                    <div 
+                      key={target.path}
+                      className={`${styles.treeItem} ${selectedFile?.path === target.path ? styles.activeTreeItem : ''}`}
+                      onClick={() => handleSelectFile(target)}
+                    >
+                      <span className={styles.itemIcon}>🔗</span> {target.name}
+                    </div>
+                  ))
+                ) : (
                   <div className={styles.emptyTreeItem}>No target endpoints</div>
                 )}
               </div>
@@ -439,15 +494,19 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             </div>
             {expanded.scripts && (
               <div className={styles.treeSub}>
-                 {fileTree?.scripts?.map(script => (
-                  <div 
-                    key={script.path}
-                    className={`${styles.treeItem} ${selectedFile?.path === script.path ? styles.activeTreeItem : ''}`}
-                    onClick={() => handleSelectFile(script)}
-                  >
-                    <span className={styles.itemIcon}>📄</span> {script.name}
-                  </div>
-                ))}
+                {Array.isArray(fileTree?.scripts) && fileTree.scripts.length > 0 ? (
+                  fileTree.scripts.map(script => (
+                    <div 
+                      key={script.path}
+                      className={`${styles.treeItem} ${selectedFile?.path === script.path ? styles.activeTreeItem : ''}`}
+                      onClick={() => handleSelectFile(script)}
+                    >
+                      <span className={styles.itemIcon}>📄</span> {script.name}
+                    </div>
+                  ))
+                ) : (
+                  <div className={styles.emptyTreeItem}>No scripts</div>
+                )}
               </div>
             )}
           </div>

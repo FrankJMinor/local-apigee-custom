@@ -86,3 +86,60 @@ export function IconLogo({ size = 34 }) {
     </svg>
   )
 }
+export function IconAssignMessage({ size = 18, className }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" className={className}>
+      <rect x="10" y="10" width="80" height="80" rx="12" stroke="currentColor" strokeWidth="4" opacity="0.9" />
+      <circle cx="35" cy="50" r="12" stroke="currentColor" strokeWidth="5" />
+      <path d="M47 50 H75" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
+      <path d="M60 50 V65" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
+      <path d="M72 50 V65" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function IconKeyValueMapOperations({ size = 18, className }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" className={className}>
+      {/* El Contenedor (Caja) */}
+      <rect x="10" y="10" width="80" height="80" rx="12" stroke="currentColor" strokeWidth="4" opacity="0.9" />
+      {/* La "Llave" del KVM */}
+      <circle cx="35" cy="50" r="12" stroke="currentColor" strokeWidth="5" />
+      <path d="M47 50 H75" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
+      <path d="M60 50 V65" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
+      <path d="M72 50 V65" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function IconVerifyAPIKey({ size = 18, className }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>
+    </svg>
+  )
+}
+
+export function IconQuota({ size = 18, className }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+    </svg>
+  )
+}
+
+export function IconXMLJSON({ size = 18, className }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/>
+    </svg>
+  )
+}
+
+export function IconSpikeArrest({ size = 18, className }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+    </svg>
+  )
+}

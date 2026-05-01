@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 import logging
 import os
+import xml.etree.ElementTree as ET
 
 # Instanciamos el logger para esta parte del backend
 logger = logging.getLogger(__name__)
@@ -47,6 +48,16 @@ def get_proxy_tree(proxy_name):  # <--- Asegúrate de que se llame así
     
 BASE_CONTRACTS = '/apigee_runtime' 
 
+
+def get_policy_type(file_path):
+    """Obtiene el tipo de política leyendo el tag raíz del XML."""
+    try:
+        tree = ET.parse(file_path)
+        root = tree.getroot()
+        # El nombre del tag raíz nos dice qué política es (ej. <VerifyAPIKey>)
+        return root.tag 
+    except Exception:
+        return "Unknown"
 
 def get_latest_revision_path() -> Optional[str]:
     """
@@ -123,7 +134,8 @@ def get_proxy_file_tree(proxy_name: str) -> Optional[Dict[str, Any]]:
                 "name": file.replace('.xml', ''), # Limpiamos extensión para el label
                 "full_name": file,
                 "path": rel_path,
-                "ext": os.path.splitext(file)[1]
+                "ext": os.path.splitext(file)[1],
+                "type": get_policy_type(full_path) if file.endswith('.xml') else "Unknown"
             }
 
             # Categorización por carpeta

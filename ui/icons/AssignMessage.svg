@@ -1,0 +1,37 @@
+<svg width="400px" height="400px" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Definición del resplandor neón -->
+    <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
+      <feMerge>
+        <feMergeNode in="coloredBlur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Marco exterior redondeado (efecto contenedor neón) -->
+  <rect x="10" y="10" width="80" height="80" rx="12" 
+        fill="none" 
+        stroke="#00D1FF" 
+        stroke-width="2.5" 
+        filter="url(#neonGlow)" 
+        opacity="0.9" />
+
+  <!-- La "Hoja" de papel -->
+  <path d="M35 25 H60 L70 35 V75 H30 V30 L35 25 Z" 
+        fill="none" 
+        stroke="#00D1FF" 
+        stroke-width="3" 
+        filter="url(#neonGlow)" />
+
+  <!-- El Lápiz (con inclinación para match con tu imagen) -->
+  <g filter="url(#neonGlow)">
+    <!-- Cuerpo del lápiz -->
+    <path d="M45 60 L65 40" stroke="#00D1FF" stroke-width="4" stroke-linecap="round" />
+    <!-- Punta del lápiz -->
+    <path d="M40 65 L45 60 L40 60 Z" fill="#00D1FF" />
+    <!-- Borrador/Parte superior -->
+    <path d="M65 40 L68 37" stroke="#00D1FF" stroke-width="5" stroke-linecap="round" />
+  </g>
+</svg>
