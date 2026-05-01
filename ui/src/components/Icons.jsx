@@ -68,9 +68,28 @@ export function IconWarning({ size }) {
 export function IconCheck({ size }) {
   return <Svg size={size}><polyline points="20 6 9 17 4 12"/></Svg>
 }
+export function IconLaptop({ size }) {
+  return <Svg size={size}><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="1" y1="20" x2="23" y2="20"/><path d="M4 17h16"/></Svg>
+}
+export function IconDiana({ size }) {
+  return <Svg size={size}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></Svg>
+}
+export function IconSet({ size }) {
+  return (
+    <Svg size={size}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M7 15l3-3-3-3" />
+      <path d="M13 12h4" />
+    </Svg>
+  )
+}
+export function IconCloud({ size }) {
+  return <Svg size={size}><path d="M17.5 19c3.037 0 5.5-2.463 5.5-5.5 0-2.822-2.124-5.147-4.887-5.458C17.587 4.603 14.103 2 10 2 6.134 2 3 5.134 3 9c0 .034.001.068.002.102C1.267 10.12 0 11.916 0 14c0 3.037 2.463 5.5 5.5 5.5h12z"/></Svg>
+}
 export function IconInfo({ size }) {
   return <Svg size={size}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></Svg>
 }
+
 export function IconLogo({ size = 34 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 34 34" fill="none">
@@ -86,6 +105,7 @@ export function IconLogo({ size = 34 }) {
     </svg>
   )
 }
+
 export function IconAssignMessage({ size = 18, className }) {
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" fill="none" className={className}>
@@ -111,6 +131,7 @@ export function IconKeyValueMapOperations({ size = 18, className }) {
     </svg>
   )
 }
+
 
 export function IconVerifyAPIKey({ size = 18, className }) {
   return (

@@ -3,7 +3,8 @@ import PropTypes from 'prop-types';
 import { 
   IconRocket, IconRefresh, IconTrace, IconActivity, IconEdit, 
   IconChevronRight, IconChevronDown, IconX, IconCheck, 
-  IconVerifyAPIKey, IconQuota, IconXMLJSON, IconSpikeArrest
+  IconVerifyAPIKey, IconQuota, IconXMLJSON, IconSpikeArrest,
+  IconKVM, IconDiana, IconSet, IconCloud, IconLaptop
 } from './Icons';
 import AssignMessageSVG from '../../icons/AssignMessage.svg';
 import KeyValueMapOperationsSVG from '../../icons/KeyValueMapOperations.svg';
@@ -40,6 +41,11 @@ const getPolicyIcon = (type, className, size = 24) => {
   if (t === 'Quota') return <IconQuota size={size} className={className} />;
   if (t === 'JSONToXML' || t === 'XMLToJSON') return <IconXMLJSON size={size} className={className} />;
   if (t === 'SpikeArrest') return <IconSpikeArrest size={size} className={className} />;
+  if (t === 'Diana') return <IconDiana size={size} className={className} />;
+  if (t === 'KVM') return <IconKVM size={size} className={className} />;
+  if (t === 'Set') return <IconSet size={size} className={className} />;
+  if (t === 'Cloud') return <IconCloud size={size} className={className} />;
+  if (t === 'Laptop') return <IconLaptop size={size} className={className} />;
   
   return <span className={className} style={{fontSize: size === 14 ? '12px' : '18px', display: 'inline-block', textAlign: 'center', width: `${size}px`}}>⚡</span>;
 };
@@ -52,83 +58,63 @@ const FlowConnection = ({ reverse = false }) => (
   </div>
 );
 
-// Drag & Drop VisualFlowCanvas con draft de steps
+// Drag & Drop VisualFlowCanvas con diseño paralelo estilo Apigee
 const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy, requestFlowDraft, responseFlowDraft, onDropPolicy }) => {
-  // Permitir drop en el área de steps
-  const handleDragOver = (e) => {
-    e.preventDefault();
-  };
+  const handleDragOver = (e) => e.preventDefault();
   const handleDrop = (e, target) => {
     e.preventDefault();
     const policyName = e.dataTransfer.getData('policyName');
     const policyType = e.dataTransfer.getData('policyType');
-    if (policyName) {
-      onDropPolicy({ name: policyName, type: policyType }, target);
-    }
+    if (policyName) onDropPolicy({ name: policyName, type: policyType }, target);
   };
+
+  const renderTrack = (label, steps, target) => (
+    <div className={styles.flowTrack} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, target)}>
+      <div className={styles.trackPill}>{label}</div>
+      <div className={styles.trackLine}>
+        {steps.map((step, idx) => (
+          <React.Fragment key={step.id || step.name + idx}>
+            <div 
+              className={`${styles.flowStep} ${selectedPolicy?.name === step.name ? styles.activeStep : ''}`}
+              onClick={() => onSelectPolicy(step)}
+            >
+              <div className={styles.iconContainer}>
+                {getPolicyIcon(step.type, styles.trackIcon, 24)}
+              </div>
+              <span className={styles.stepLabel}>{step.name}</span>
+            </div>
+            {idx < steps.length - 1 && <FlowConnection />}
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+
+  const requestSteps = [
+    { name: 'App', type: 'Laptop' },
+    ...requestFlowDraft,
+    { name: 'Target', type: 'Cloud' }
+  ];
+
+  const responseSteps = [
+    { name: 'Target', type: 'Cloud' },
+    ...responseFlowDraft,
+    { name: 'App', type: 'Laptop' }
+  ];
+
   return (
     <main className={styles.flowDesigner}>
+      <div className={styles.designerHeader}>
+        <div className={styles.headerLeft}>SERVICE FLOW DESIGNER</div>
+        <div className={styles.headerRight}>
+          <span className={styles.sessionInfo}>Active Session: Flow-1</span>
+          <span className={styles.statusInfo}>Status: Synchronized</span>
+        </div>
+      </div>
       <NeonFilter />
-      <div className={styles.flowContainer}>
-        {/* Pipeline: Request */}
-        <div className={styles.flowBox}>
-          <div className={styles.flowLabel}>Request Pipeline</div>
-          <div className={styles.pipeline} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'request')}>
-            <div className={styles.flowStep}>
-              <div className={styles.stepIcon}>💻</div>
-              <span className={styles.stepLabel}>App</span>
-            </div>
-            {requestFlowDraft.map((policy, idx) => (
-              <React.Fragment key={policy.name + idx}>
-                <FlowConnection />
-                <div
-                  className={`${styles.flowStep} ${selectedPolicy?.name === policy.name ? styles.activeStep : ''}`}
-                  onClick={() => onSelectPolicy(policy)}
-                >
-                  <div className={`${styles.stepIcon} ${getPolicyTypeClass(policy.type)}`}>
-                    {getPolicyIcon(policy.type, styles.canvasNodeIcon)}
-                  </div>
-                  <span className={styles.stepLabel}>{policy.name}</span>
-                </div>
-              </React.Fragment>
-            ))}
-            <FlowConnection />
-            <div className={styles.flowStep}>
-              <div className={styles.stepIcon}>☁️</div>
-              <span className={styles.stepLabel}>Target</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Pipeline: Response */}
-        <div className={styles.flowBox} style={{ marginTop: '40px' }}>
-          <div className={styles.flowLabel}>Response Pipeline</div>
-          <div className={styles.pipeline} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'response')}>
-            <div className={styles.flowStep}>
-              <div className={styles.stepIcon}>☁️</div>
-              <span className={styles.stepLabel}>Target</span>
-            </div>
-            {[...responseFlowDraft].reverse().map((policy, idx) => (
-              <React.Fragment key={policy.name + idx}>
-                <FlowConnection reverse />
-                <div
-                  className={`${styles.flowStep} ${selectedPolicy?.name === policy.name ? styles.activeStep : ''}`}
-                  onClick={() => onSelectPolicy(policy)}
-                >
-                  <div className={`${styles.stepIcon} ${getPolicyTypeClass(policy.type)}`}>
-                    {getPolicyIcon(policy.type, styles.canvasNodeIcon)}
-                  </div>
-                  <span className={styles.stepLabel}>{policy.name}</span>
-                </div>
-              </React.Fragment>
-            ))}
-            <FlowConnection reverse />
-            <div className={styles.flowStep}>
-              <div className={styles.stepIcon}>💻</div>
-              <span className={styles.stepLabel}>App</span>
-            </div>
-          </div>
-        </div>
+      <div className={styles.parallelTracks}>
+        {renderTrack('REQUEST', requestSteps, 'request')}
+        {renderTrack('RESPONSE', responseSteps, 'response')}
       </div>
     </main>
   );
@@ -273,6 +259,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [isEditorCollapsed, setIsEditorCollapsed] = useState(false);
   const [xmlCode, setXmlCode] = useState('');
+  const [fileCache, setFileCache] = useState({}); // Cache para persistir cambios entre archivos
 
   const [expanded, setExpanded] = useState({
     policies: true,
@@ -330,10 +317,19 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   const handleSelectFile = async (file) => {
     setSelectedFile(file);
     
-    // Si es una política, activamos el inspector (opcional, según lógica previa)
+    // Si ya tenemos el contenido en cache (editado o previamente cargado), lo usamos
+    if (fileCache[file.path]) {
+      setXmlCode(fileCache[file.path]);
+      
+      // Si es una política, actualizamos la selección pero respetamos si el inspector está cerrado
+      if (file.path.includes('policies')) {
+        setSelectedPolicy({ name: file.name, type: file.type || 'Mediation' });
+      }
+      return;
+    }
+
     if (file.path.includes('policies')) {
       setSelectedPolicy({ name: file.name, type: file.type || 'Mediation' });
-      setIsInspectorOpen(true);
     }
 
     try {
@@ -341,6 +337,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
       const data = await response.json();
       if (data.content) {
         setXmlCode(data.content);
+        setFileCache(prev => ({ ...prev, [file.path]: data.content }));
       }
     } catch (e) {
       console.error("Error al cargar contenido:", e);
@@ -356,7 +353,6 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     }
     
     setSelectedPolicy(policy);
-    setIsInspectorOpen(true);
     
     // Sincronización Inteligente: Scroll al tag <Name> (si ya está cargado el XML)
     if (editorRef.current) {
@@ -392,16 +388,22 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
         xml += `\n      <Step><Name>${policy.name}</Name></Step>`;
       });
       xml += `\n    </Response>\n  </PreFlow>\n  <HTTPProxyConnection>\n    <BasePath>/v1/hello</BasePath>\n  </HTTPProxyConnection>\n  <RouteRule name="default">\n    <TargetEndpoint>default</TargetEndpoint>\n  </RouteRule>\n</ProxyEndpoint>`;
+      
       setXmlCode(xml);
+      // Sincronizar con la cache para que al volver de otro archivo se mantenga
+      setFileCache(prev => ({ ...prev, [selectedFile.path]: xml }));
     }
   }, [requestFlowDraft, responseFlowDraft, selectedFile]);
 
   // Handler para drop de política
   const handleDropPolicy = (policy, target) => {
+    // Crear un nuevo step con ID único para permitir duplicados y mejor manejo de listas
+    const newStep = { ...policy, id: `${policy.name}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}` };
+    
     if (target === 'request') {
-      setRequestFlowDraft(prev => prev.some(p => p.name === policy.name) ? prev : [...prev, policy]);
+      setRequestFlowDraft(prev => [...prev, newStep]);
     } else if (target === 'response') {
-      setResponseFlowDraft(prev => prev.some(p => p.name === policy.name) ? prev : [...prev, policy]);
+      setResponseFlowDraft(prev => [...prev, newStep]);
     }
   };
 
@@ -580,7 +582,12 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
 
           <XmlEditor 
             xmlCode={xmlCode} 
-            setXmlCode={setXmlCode} 
+            setXmlCode={(newVal) => {
+              setXmlCode(newVal);
+              if (selectedFile) {
+                setFileCache(prev => ({ ...prev, [selectedFile.path]: newVal }));
+              }
+            }} 
             footerHeight={footerHeight}
             onResizerMouseDown={() => { 
               isResizing.current = true; 

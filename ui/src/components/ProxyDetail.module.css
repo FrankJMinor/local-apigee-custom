@@ -287,48 +287,145 @@
   background: var(--bg-page);
   background-image: radial-gradient(var(--border) 1px, transparent 1px);
   background-size: 24px 24px;
-  padding: 3rem;
+  padding: 2rem; /* Reducido un poco para ganar espacio */
   overflow-y: auto;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start; /* Alineado a la izquierda para aprovechar el espacio de crecimiento */
 }
 
-.flowContainer {
-  width: 100%;
-  max-width: 900px;
+/* ── Parallel Tracks Style (Apigee Modern) ──────────────────────────────── */
+.flowDesigner {
+  flex: 1;
+  background: #0b1120; /* Fondo más oscuro estilo rejilla */
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
   display: flex;
   flex-direction: column;
-  gap: 4rem;
-}
-
-.flowBox {
+  padding: 0;
+  overflow: hidden;
   position: relative;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 1rem;
-  padding: 2rem;
-  box-shadow: var(--shadow);
 }
 
-.flowLabel {
-  position: absolute;
-  top: -0.75rem;
-  left: 1.5rem;
-  background: var(--accent);
-  color: #fff;
-  font-size: 0.65rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  padding: 0.2rem 0.6rem;
-  border-radius: 4px;
+.designerHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  background: rgba(15, 23, 42, 0.9);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #64748b;
   letter-spacing: 0.05em;
+  z-index: 30;
 }
 
-.pipeline {
+.headerRight {
+  display: flex;
+  gap: 2rem;
+}
+
+.statusInfo {
+  color: #10b981;
+}
+
+.parallelTracks {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0 2rem;
+  overflow-y: auto;
+}
+
+.flowTrack {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 180px;
+}
+
+.trackPill {
+  position: absolute;
+  left: 0;
+  z-index: 20;
+  background: #2563eb;
+  color: #fff;
+  padding: 0.25rem 0.8rem;
+  border-radius: 50px;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  min-width: 80px;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+}
+
+/* Request: Label debajo */
+.flowTrack:first-child .trackPill {
+  bottom: 20px;
+}
+
+/* Response: Label arriba */
+.flowTrack:last-child .trackPill {
+  top: 20px;
+}
+
+/* Ajuste de etiquetas Request/Response como en la imagen */
+.flowTrack:first-child .trackPill,
+.flowTrack:last-child .trackPill {
+  bottom: auto;
+  top: 50%;
+  transform: translateY(-50%);
+  left: 10px;
+}
+
+.trackLine {
+  display: flex;
+  align-items: center;
+  gap: 0; /* Gaps manejados por flowLink */
+  position: relative;
+  padding-left: 140px; /* Mayor espacio para la etiqueta */
+  width: 100%;
+}
+
+/* Línea base continua */
+.trackLine::before {
+  content: '';
+  position: absolute;
+  left: 140px;
+  right: 2rem;
+  top: 50%;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+.iconContainer {
+  width: 52px;
+  height: 52px;
+  border: 2px solid #22d3ee; /* Cian Brillante */
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2rem;
+  background: rgba(34, 211, 238, 0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  position: relative;
+  z-index: 5;
+}
+
+.iconContainer:hover {
+  background: rgba(34, 211, 238, 0.15);
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.4);
+  transform: translateY(-2px);
+}
+
+.flowTrack:last-child .iconContainer:hover {
+  transform: translateY(2px);
 }
 
 .flowStep {
@@ -336,100 +433,66 @@
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
-  cursor: pointer;
-  transition: transform 0.2s;
+  min-width: 120px;
+  position: relative;
+  z-index: 5;
 }
 
-.flowStep:hover {
-  transform: translateY(-4px);
+/* Request: Iconos arriba */
+.flowTrack:first-child .flowStep {
+  transform: translateY(-45px);
 }
 
-.stepIcon {
-  width: 52px;
-  height: 52px;
-  background: var(--bg-th);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.25rem;
-  transition: all 0.3s;
-  color: var(--text-primary);
+/* Response: Iconos abajo */
+.flowTrack:last-child .flowStep {
+  transform: translateY(45px);
 }
 
-.flowArrow {
-  color: var(--text-muted);
+/* Remover transformaciones para centrado exacto como en la imagen */
+.flowTrack:first-child .flowStep,
+.flowTrack:last-child .flowStep {
+  transform: translateY(0);
 }
 
-/* ── Gas Flow Connection ────────────────────────────────────────────────── */
+.stepLabel {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  font-weight: 600;
+  text-align: center;
+  max-width: 100px;
+  line-height: 1.2;
+}
+
 .flowLink {
   position: relative;
-  width: 90px;
+  width: 80px;
   height: 14px;
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 10px;
-  overflow: hidden;
   display: flex;
   align-items: center;
-  box-shadow: 0 0 15px rgba(0, 242, 255, 0.1); /* Brillo neón base */
-}
-
-.gasEffect {
-  position: absolute;
-  inset: -2px;
-  background: linear-gradient(
-    90deg, 
-    transparent, 
-    rgba(0, 242, 255, 0.2), 
-    rgba(0, 242, 255, 0.5), 
-    rgba(0, 242, 255, 0.2), 
-    transparent
-  );
-  background-size: 200% 100%;
-  animation: gasMove 2.5s infinite linear;
-  filter: blur(6px); /* Más desenfoque para efecto humo */
+  z-index: 5;
+  background: transparent;
 }
 
 .flowArrows {
   position: absolute;
   inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg width='20' height='12' viewBox='0 0 20 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M8 3L11 6L8 9' stroke='rgba(0,242,255,0.6)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg width='20' height='10' viewBox='0 0 20 10' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M8 2L11 5L8 8' stroke='%233b82f6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: repeat-x;
-  animation: arrowMove 1.5s infinite linear;
-  opacity: 0.8;
+  animation: arrowFlow 2s infinite linear;
+  opacity: 0.6;
 }
 
-@keyframes gasMove {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+.flowTrack:last-child .flowArrows {
+  background-image: url("data:image/svg+xml,%3Csvg width='20' height='10' viewBox='0 0 20 10' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M8 2L11 5L8 8' stroke='%2310b981' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
-@keyframes arrowMove {
+@keyframes arrowFlow {
   from { background-position: 0 0; }
   to { background-position: 40px 0; }
 }
 
-/* Response Flow (Sentido opuesto y humo neón invertido) */
-.reverseFlow {
-  transform: scaleX(-1); /* Invierte las flechas y el movimiento */
-  box-shadow: 0 0 15px rgba(16, 185, 129, 0.1); /* Tinte verde neón para respuesta si prefieres */
-}
 
-.reverseFlow .gasEffect {
-  background: linear-gradient(
-    90deg, 
-    transparent, 
-    rgba(16, 185, 129, 0.2), 
-    rgba(16, 185, 129, 0.5), 
-    rgba(16, 185, 129, 0.2), 
-    transparent
-  );
-}
 
-.reverseFlow .flowArrows {
-  background-image: url("data:image/svg+xml,%3Csvg width='20' height='12' viewBox='0 0 20 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M8 3L11 6L8 9' stroke='rgba(16,185,129,0.7)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-}
 
 .stepLabel {
   font-size: 0.75rem;
