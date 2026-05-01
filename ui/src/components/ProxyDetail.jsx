@@ -52,7 +52,20 @@ const FlowConnection = ({ reverse = false }) => (
   </div>
 );
 
-const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy }) => {
+// Drag & Drop VisualFlowCanvas con draft de steps
+const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy, requestFlowDraft, responseFlowDraft, onDropPolicy }) => {
+  // Permitir drop en el área de steps
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+  const handleDrop = (e, target) => {
+    e.preventDefault();
+    const policyName = e.dataTransfer.getData('policyName');
+    const policyType = e.dataTransfer.getData('policyType');
+    if (policyName) {
+      onDropPolicy({ name: policyName, type: policyType }, target);
+    }
+  };
   return (
     <main className={styles.flowDesigner}>
       <NeonFilter />
@@ -60,26 +73,26 @@ const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy }) => {
         {/* Pipeline: Request */}
         <div className={styles.flowBox}>
           <div className={styles.flowLabel}>Request Pipeline</div>
-          <div className={styles.pipeline}>
+          <div className={styles.pipeline} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'request')}>
             <div className={styles.flowStep}>
               <div className={styles.stepIcon}>💻</div>
               <span className={styles.stepLabel}>App</span>
             </div>
-            
+            {requestFlowDraft.map((policy, idx) => (
+              <React.Fragment key={policy.name + idx}>
+                <FlowConnection />
+                <div
+                  className={`${styles.flowStep} ${selectedPolicy?.name === policy.name ? styles.activeStep : ''}`}
+                  onClick={() => onSelectPolicy(policy)}
+                >
+                  <div className={`${styles.stepIcon} ${getPolicyTypeClass(policy.type)}`}>
+                    {getPolicyIcon(policy.type, styles.canvasNodeIcon)}
+                  </div>
+                  <span className={styles.stepLabel}>{policy.name}</span>
+                </div>
+              </React.Fragment>
+            ))}
             <FlowConnection />
-            
-            <div 
-              className={`${styles.flowStep} ${selectedPolicy?.name === 'Verify-API-Key-1' ? styles.activeStep : ''}`}
-              onClick={() => onSelectPolicy({ name: 'Verify-API-Key-1', type: 'Security' })}
-            >
-              <div className={`${styles.stepIcon} ${getPolicyTypeClass('Verify')}`}>
-                {getPolicyIcon('VerifyAPIKey', styles.canvasNodeIcon)}
-              </div>
-              <span className={styles.stepLabel}>Verify API Key</span>
-            </div>
-            
-            <FlowConnection />
-
             <div className={styles.flowStep}>
               <div className={styles.stepIcon}>☁️</div>
               <span className={styles.stepLabel}>Target</span>
@@ -88,28 +101,28 @@ const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy }) => {
         </div>
 
         {/* Pipeline: Response */}
-        <div className={styles.flowBox}>
+        <div className={styles.flowBox} style={{ marginTop: '40px' }}>
           <div className={styles.flowLabel}>Response Pipeline</div>
-          <div className={styles.pipeline}>
+          <div className={styles.pipeline} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'response')}>
             <div className={styles.flowStep}>
               <div className={styles.stepIcon}>☁️</div>
               <span className={styles.stepLabel}>Target</span>
             </div>
-
+            {[...responseFlowDraft].reverse().map((policy, idx) => (
+              <React.Fragment key={policy.name + idx}>
+                <FlowConnection reverse />
+                <div
+                  className={`${styles.flowStep} ${selectedPolicy?.name === policy.name ? styles.activeStep : ''}`}
+                  onClick={() => onSelectPolicy(policy)}
+                >
+                  <div className={`${styles.stepIcon} ${getPolicyTypeClass(policy.type)}`}>
+                    {getPolicyIcon(policy.type, styles.canvasNodeIcon)}
+                  </div>
+                  <span className={styles.stepLabel}>{policy.name}</span>
+                </div>
+              </React.Fragment>
+            ))}
             <FlowConnection reverse />
-            
-            <div 
-              className={`${styles.flowStep} ${selectedPolicy?.name === 'JSON-to-XML-1' ? styles.activeStep : ''}`}
-              onClick={() => onSelectPolicy({ name: 'JSON-to-XML-1', type: 'Mediation' })}
-            >
-              <div className={`${styles.stepIcon} ${getPolicyTypeClass('JSON')}`}>
-                {getPolicyIcon('JSONToXML', styles.canvasNodeIcon)}
-              </div>
-              <span className={styles.stepLabel}>JSON to XML</span>
-            </div>
-
-            <FlowConnection reverse />
-
             <div className={styles.flowStep}>
               <div className={styles.stepIcon}>💻</div>
               <span className={styles.stepLabel}>App</span>
@@ -123,7 +136,10 @@ const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy }) => {
 
 VisualFlowCanvas.propTypes = {
   selectedPolicy: PropTypes.shape({ name: PropTypes.string, type: PropTypes.string }),
-  onSelectPolicy: PropTypes.func.isRequired
+  onSelectPolicy: PropTypes.func.isRequired,
+  requestFlowDraft: PropTypes.array.isRequired,
+  responseFlowDraft: PropTypes.array.isRequired,
+  onDropPolicy: PropTypes.func.isRequired
 };
 
 // ── SUB-COMPONENT: PolicyInspector ───────────────────────────────────────────
@@ -358,6 +374,46 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     }
   };
 
+  // Estado temporal para el flujo de request y response (draft)
+  const [requestFlowDraft, setRequestFlowDraft] = useState([]);
+  const [responseFlowDraft, setResponseFlowDraft] = useState([]);
+
+  // Actualiza el XML mostrado en el editor según el draft
+  useEffect(() => {
+    // Solo si el archivo seleccionado es un ProxyEndpoint
+    if (selectedFile && selectedFile.type === 'ProxyEndpoint') {
+      // Generar XML con los steps del draft
+      let xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<ProxyEndpoint name="${selectedFile.name}">\n  <PreFlow>\n    <Request>`;
+      requestFlowDraft.forEach(policy => {
+        xml += `\n      <Step><Name>${policy.name}</Name></Step>`;
+      });
+      xml += `\n    </Request>\n    <Response>`;
+      responseFlowDraft.forEach(policy => {
+        xml += `\n      <Step><Name>${policy.name}</Name></Step>`;
+      });
+      xml += `\n    </Response>\n  </PreFlow>\n  <HTTPProxyConnection>\n    <BasePath>/v1/hello</BasePath>\n  </HTTPProxyConnection>\n  <RouteRule name="default">\n    <TargetEndpoint>default</TargetEndpoint>\n  </RouteRule>\n</ProxyEndpoint>`;
+      setXmlCode(xml);
+    }
+  }, [requestFlowDraft, responseFlowDraft, selectedFile]);
+
+  // Handler para drop de política
+  const handleDropPolicy = (policy, target) => {
+    if (target === 'request') {
+      setRequestFlowDraft(prev => prev.some(p => p.name === policy.name) ? prev : [...prev, policy]);
+    } else if (target === 'response') {
+      setResponseFlowDraft(prev => prev.some(p => p.name === policy.name) ? prev : [...prev, policy]);
+    }
+  };
+
+  // Hacer policies draggables
+  const makePolicyDraggable = (policy) => ({
+    draggable: true,
+    onDragStart: (e) => {
+      e.dataTransfer.setData('policyName', policy.name);
+      e.dataTransfer.setData('policyType', policy.type);
+    }
+  });
+
   return (
     <div className={styles.detailWrapper}>
       {/* Top Bar: Actions & Breadcrumbs */}
@@ -425,10 +481,11 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
               <div className={styles.treeSub}>
                 {Array.isArray(fileTree?.policies) && fileTree.policies.length > 0 ? (
                   fileTree.policies.map(policy => (
-                    <div 
+                    <div
                       key={policy.path}
                       className={`${styles.treeItem} ${selectedFile?.path === policy.path ? styles.activeTreeItem : ''}`}
                       onClick={() => handleSelectFile(policy)}
+                      {...makePolicyDraggable(policy)}
                     >
                       <span className={styles.itemIcon}>
                         {getPolicyIcon(policy.type, styles.sidebarIcon, 14)}
@@ -514,8 +571,11 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
 
         <div className={styles.mainArea}>
           <VisualFlowCanvas 
-            selectedPolicy={selectedPolicy} 
-            onSelectPolicy={handleSelectPolicy} 
+            selectedPolicy={selectedPolicy}
+            onSelectPolicy={handleSelectPolicy}
+            requestFlowDraft={requestFlowDraft}
+            responseFlowDraft={responseFlowDraft}
+            onDropPolicy={handleDropPolicy}
           />
 
           <XmlEditor 
