@@ -170,15 +170,18 @@
 .workspace {
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row; /* Cambio a horizontal */
   position: relative;
   overflow: hidden;
 }
 
-.workspaceBody {
+.mainArea {
   flex: 1;
   display: flex;
+  flex-direction: column;
   overflow: hidden;
+  background: var(--bg-page);
+  position: relative;
 }
 
 /* ── Navigator ───────────────────────────────────────────────────────────── */
@@ -188,6 +191,7 @@
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  z-index: 5;
 }
 
 .navHeader {
@@ -384,20 +388,17 @@
 
 /* ── Inspector Drawer ────────────────────────────────────────────────────── */
 .inspectorDrawer {
-  position: fixed;
-  top: 50px;
-  right: 0;
   width: 340px;
-  height: calc(100vh - 50px);
+  height: 100%;
   background: var(--bg-card);
   border-left: 1px solid var(--border);
   box-shadow: -15px 0 35px rgba(0, 0, 0, 0.1);
   z-index: 100;
-  transform: translateX(100%);
-  will-change: transform;
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-right: 0;
+  transition: margin-right 0.4s cubic-bezier(0.16, 1, 0.3, 1), width 0.4s;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 [data-theme="dark"] .inspectorDrawer {
@@ -405,7 +406,49 @@
 }
 
 .drawerOpen {
-  transform: translateX(0);
+  margin-right: 0;
+}
+
+/* Cuando está cerrado, ocupa 0 de ancho en el flex */
+.inspectorDrawer:not(.drawerOpen) {
+  width: 0;
+  border-left: none;
+}
+
+.inspectorToggle {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-right: none;
+  padding: 1rem 0.4rem;
+  border-radius: 8px 0 0 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  color: var(--text-secondary);
+  z-index: 90;
+  transition: all 0.2s;
+  box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+}
+
+.inspectorToggle:hover {
+  background: var(--bg-th);
+  color: var(--accent);
+  padding-right: 0.6rem;
+}
+
+.inspectorToggle span {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
 .drawerHeader {

@@ -8,48 +8,54 @@ function ProxyDetailPage() {
   const { proxyName } = useParams();
   const navigate = useNavigate();
   const [proxy, setProxy] = useState(null);
+  const [fileTree, setFileTree] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch(API_URL)
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
+
+    // Fetch Proxy List to get general info (optional, but keep for compatibility)
+    const fetchGeneral = fetch(API_URL)
+      .then(res => res.json())
       .then(data => {
-        // Buscar el proxy por nombre
         const proxies = data.aPIProxy || data;
-        let found = null;
-        proxies.forEach(proxy => {
-          const name = proxy.name?.name || proxy.name || '-';
-          if (name === proxyName) {
-            // Tomar la última revisión
-            const rev = (proxy.revision || [])[0] || {};
-            found = {
-              ...proxy,
-              ...rev,
-              name,
-              revision: rev.name || '-',
-              basePath: rev.configuration?.basePath || '-',
-              lastModified: rev.lastModifiedAt || null,
-            };
-          }
-        });
-        setProxy(found);
+        return proxies.find(p => (p.name?.name || p.name) === proxyName);
+      });
+
+    // Fetch File Tree from the new local API
+    const fetchFiles = fetch(`http://localhost:8446/v1/proxies/${proxyName}/files`)
+      .then(res => {
+        if (!res.ok) throw new Error(`Error al cargar archivos: ${res.status}`);
+        return res.json();
+      });
+
+    Promise.all([fetchGeneral, fetchFiles])
+      .then(([foundProxy, fileData]) => {
+        if (foundProxy) {
+          const rev = (foundProxy.revision || [])[0] || {};
+          setProxy({
+            ...foundProxy,
+            ...rev,
+            name: proxyName,
+            revision: rev.name || '1',
+          });
+        } else {
+          // Fallback if not found in list but files exist
+          setProxy({ name: proxyName, revision: '1' });
+        }
+        setFileTree(fileData.files);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [proxyName]);
 
-  if (loading) return <div style={{ padding: 40 }}>Cargando...</div>;
+  if (loading) return <div style={{ padding: 40 }}>Cargando datos del proxy...</div>;
   if (error) return <div style={{ padding: 40, color: '#ef4444' }}>Error: {error}</div>;
-  if (!proxy) return <div style={{ padding: 40 }}>Proxy no encontrado</div>;
 
   return (
-    <ProxyDetail proxy={proxy} onClose={() => navigate('/proxies')} />
+    <ProxyDetail proxy={proxy} fileTree={fileTree} onClose={() => navigate('/proxies')} />
   );
 }
 

@@ -139,3 +139,22 @@ def get_proxy_file_tree(proxy_name: str) -> Optional[Dict[str, Any]]:
                 tree["root_config"] = file_data
 
     return tree
+
+def get_proxy_file_content(proxy_name: str, file_path: str) -> Optional[str]:
+    """Lee el contenido de un archivo específico dentro del bundle del proxy."""
+    base_path = get_latest_revision_path()
+    if not base_path:
+        return None
+
+    full_path = os.path.join(base_path, proxy_name, 'apiproxy', file_path)
+
+    if not os.path.exists(full_path) or not os.path.isfile(full_path):
+        logger.error(f"Archivo no encontrado: {full_path}")
+        return None
+
+    try:
+        with open(full_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception as e:
+        logger.error(f"Error al leer archivo {full_path}: {e}")
+        return None

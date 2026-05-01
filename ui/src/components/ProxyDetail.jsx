@@ -139,7 +139,7 @@ PolicyInspector.propTypes = {
 };
 
 // ── SUB-COMPONENT: XmlEditor ─────────────────────────────────────────────────
-const XmlEditor = ({ xmlCode, setXmlCode, footerHeight, onResizerMouseDown, editorRef, isCollapsed, onToggleCollapse }) => {
+const XmlEditor = ({ xmlCode, setXmlCode, footerHeight, onResizerMouseDown, editorRef, isCollapsed, onToggleCollapse, currentFileName }) => {
   const lineNumbers = xmlCode.split('\n').map((_, i) => i + 1);
 
   return (
@@ -152,7 +152,7 @@ const XmlEditor = ({ xmlCode, setXmlCode, footerHeight, onResizerMouseDown, edit
       
       <div className={styles.codeHeader}>
         <div className={styles.codeTabs}>
-          <div className={`${styles.codeTab} ${styles.activeCodeTab}`}>config.xml</div>
+          <div className={`${styles.codeTab} ${styles.activeCodeTab}`}>{currentFileName || 'config.xml'}</div>
         </div>
         <div className={styles.codeActions}>
           <button className={styles.iconAction} title="Copy"><IconEdit size={14}/></button>
@@ -197,48 +197,35 @@ XmlEditor.propTypes = {
   onResizerMouseDown: PropTypes.func.isRequired,
   editorRef: PropTypes.oneOfType([PropTypes.func, PropTypes.shape({ current: PropTypes.any })]),
   isCollapsed: PropTypes.bool.isRequired,
-  onToggleCollapse: PropTypes.func.isRequired
+  onToggleCollapse: PropTypes.func.isRequired,
+  currentFileName: PropTypes.string
 };
 
 // ── MAIN COMPONENT: ProxyDetail ──────────────────────────────────────────────
-function ProxyDetail({ proxy, onClose }) {
+function ProxyDetail({ proxy, fileTree, onClose }) {
   const [activeTab, setActiveTab] = useState('Develop');
   const [footerHeight, setFooterHeight] = useState(280);
   const [selectedPolicy, setSelectedPolicy] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [isEditorCollapsed, setIsEditorCollapsed] = useState(false);
-  const [xmlCode, setXmlCode] = useState(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<ProxyEndpoint name="default">
-    <PreFlow name="PreFlow">
-        <Request>
-            <Step>
-                <Name>Verify-API-Key-1</Name>
-            </Step>
-        </Request>
-    </PreFlow>
-    <PostFlow name="PostFlow">
-        <Response>
-            <Step>
-                <Name>JSON-to-XML-1</Name>
-            </Step>
-        </Response>
-    </PostFlow>
-    <HTTPProxyConnection>
-        <BasePath>/v1/hello</BasePath>
-    </HTTPProxyConnection>
-    <RouteRule name="default">
-        <TargetEndpoint>default</TargetEndpoint>
-    </RouteRule>
-</ProxyEndpoint>`);
+  const [xmlCode, setXmlCode] = useState('');
 
   const [expanded, setExpanded] = useState({
     policies: true,
     proxyEndpoints: true,
     endpointsDefault: true,
-    targetEndpoints: false,
+    targetEndpoints: true,
     scripts: false,
     xsl: false
   });
+
+  // Efecto inicial para cargar el root_config (HelloWorld.xml)
+  useEffect(() => {
+    if (fileTree?.root_config) {
+      handleSelectFile(fileTree.root_config);
+    }
+  }, [fileTree]);
 
   const toggle = (key) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -277,11 +264,38 @@ function ProxyDetail({ proxy, onClose }) {
     };
   }, [handleMouseMove, handleMouseUp]);
 
+  const handleSelectFile = async (file) => {
+    setSelectedFile(file);
+    
+    // Si es una política, activamos el inspector (opcional, según lógica previa)
+    if (file.path.includes('policies')) {
+      setSelectedPolicy({ name: file.name, type: 'Mediation' }); // Tipo genérico por ahora
+      setIsInspectorOpen(true);
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8446/v1/proxies/${proxy.name}/content?path=${encodeURIComponent(file.path)}`);
+      const data = await response.json();
+      if (data.content) {
+        setXmlCode(data.content);
+      }
+    } catch (e) {
+      console.error("Error al cargar contenido:", e);
+      setXmlCode(`<!-- Error al cargar ${file.path} -->`);
+    }
+  };
+
   const handleSelectPolicy = (policy) => {
+    // Buscar el archivo correspondiente en el tree para cargar su contenido
+    const policyFile = fileTree?.policies?.find(f => f.name === policy.name);
+    if (policyFile) {
+      handleSelectFile(policyFile);
+    }
+    
     setSelectedPolicy(policy);
     setIsInspectorOpen(true);
     
-    // Sincronización Inteligente: Scroll al tag <Name>
+    // Sincronización Inteligente: Scroll al tag <Name> (si ya está cargado el XML)
     if (editorRef.current) {
       const searchStr = `<Name>${policy.name}</Name>`;
       const index = xmlCode.indexOf(searchStr);
@@ -341,98 +355,123 @@ function ProxyDetail({ proxy, onClose }) {
 
       {/* Main Workspace */}
       <div className={styles.workspace}>
-        <div className={styles.workspaceBody}>
-          <aside className={styles.navigator}>
-            <div className={styles.navHeader}>Project Explorer</div>
-            <div className={styles.navTree}>
-              {/* Policies Section */}
-              <div className={styles.treeFolder} onClick={() => toggle('policies')}>
-                {expanded.policies ? <IconChevronDown size={14}/> : <IconChevronRight size={14}/>}
-                <span className={styles.folderIcon}>📁</span> Policies
+        <aside className={styles.navigator}>
+          <div className={styles.navHeader}>Project Explorer</div>
+          <div className={styles.navTree}>
+            {/* Root Config File */}
+            {fileTree?.root_config && (
+              <div 
+                className={`${styles.treeItem} ${selectedFile?.path === fileTree.root_config.path ? styles.activeTreeItem : ''}`}
+                onClick={() => handleSelectFile(fileTree.root_config)}
+                style={{ fontWeight: 'bold', marginBottom: '8px' }}
+              >
+                <span className={styles.itemIcon}>📄</span> {fileTree.root_config.full_name}
               </div>
-              {expanded.policies && (
-                <div className={styles.treeSub}>
-                  <div 
-                    className={`${styles.treeItem} ${selectedPolicy?.name === 'Verify-API-Key-1' ? styles.activeTreeItem : ''}`}
-                    onClick={() => handleSelectPolicy({ name: 'Verify-API-Key-1', type: 'Security' })}
-                  >
-                    <span className={styles.itemIcon}>⚡</span> Verify API Key 1
-                  </div>
-                  <div 
-                    className={`${styles.treeItem} ${selectedPolicy?.name === 'JSON-to-XML-1' ? styles.activeTreeItem : ''}`}
-                    onClick={() => handleSelectPolicy({ name: 'JSON-to-XML-1', type: 'Mediation' })}
-                  >
-                    <span className={styles.itemIcon}>⚡</span> JSON to XML 1
-                  </div>
-                  <div className={styles.treeItem}><span className={styles.itemIcon}>⚡</span> Assign Message 1</div>
-                  <div className={styles.treeItem}><span className={styles.itemIcon}>⚡</span> Quota 1</div>
-                </div>
-              )}
+            )}
 
-              {/* Proxy Endpoints Section */}
-              <div className={styles.treeFolder} onClick={() => toggle('proxyEndpoints')}>
-                {expanded.proxyEndpoints ? <IconChevronDown size={14}/> : <IconChevronRight size={14}/>}
-                <span className={styles.folderIcon}>📁</span> Proxy Endpoints
-              </div>
-              {expanded.proxyEndpoints && (
-                <div className={styles.treeSub}>
-                  <div className={styles.treeFolder} onClick={(e) => { e.stopPropagation(); toggle('endpointsDefault'); }}>
-                    {expanded.endpointsDefault ? <IconChevronDown size={14}/> : <IconChevronRight size={14}/>}
-                    <span className={styles.folderIcon}>📁</span> default
-                  </div>
-                  {expanded.endpointsDefault && (
-                    <div className={styles.treeSub}>
-                      <div className={styles.treeItem}>
-                        <span className={styles.itemIcon}>⚙️</span> PreFlow
-                        <span className={styles.methodBadge}>ALL</span>
-                      </div>
-                      <div className={styles.treeItem}>
-                        <span className={styles.itemIcon}>🔗</span> search
-                        <span className={styles.methodBadge} data-method="get">GET</span>
-                      </div>
-                      <div className={styles.treeItem}>
-                        <span className={styles.itemIcon}>🔗</span> issue
-                        <span className={styles.methodBadge} data-method="get">GET</span>
-                      </div>
-                      <div className={styles.treeItem}>
-                        <span className={styles.itemIcon}>⚙️</span> PostFlow
-                        <span className={styles.methodBadge}>ALL</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Target Endpoints Section */}
-              <div className={styles.treeFolder} onClick={() => toggle('targetEndpoints')}>
-                {expanded.targetEndpoints ? <IconChevronDown size={14}/> : <IconChevronRight size={14}/>}
-                <span className={styles.folderIcon}>📁</span> Target Endpoints
-              </div>
-              {expanded.targetEndpoints && (
-                <div className={styles.treeSub}>
-                  <div className={styles.treeItem}>
-                    <span className={styles.itemIcon}>🔗</span> default
-                  </div>
-                </div>
-              )}
-
-              {/* Scripts Section */}
-              <div className={styles.treeFolder} onClick={() => toggle('scripts')}>
-                {expanded.scripts ? <IconChevronDown size={14}/> : <IconChevronRight size={14}/>}
-                <span className={styles.folderIcon}>📁</span> Scripts
-              </div>
-
-              {/* XSL Section */}
-              <div className={styles.treeFolder} onClick={() => toggle('xsl')}>
-                {expanded.xsl ? <IconChevronDown size={14}/> : <IconChevronRight size={14}/>}
-                <span className={styles.folderIcon}>📁</span> xsl
-              </div>
+            {/* Policies Section */}
+            <div className={styles.treeFolder} onClick={() => toggle('policies')}>
+              {expanded.policies ? <IconChevronDown size={14}/> : <IconChevronRight size={14}/>}
+              <span className={styles.folderIcon}>📁</span> Policies
             </div>
-          </aside>
+            {expanded.policies && (
+              <div className={styles.treeSub}>
+                {fileTree?.policies?.map(policy => (
+                  <div 
+                    key={policy.path}
+                    className={`${styles.treeItem} ${selectedFile?.path === policy.path ? styles.activeTreeItem : ''}`}
+                    onClick={() => handleSelectFile(policy)}
+                  >
+                    <span className={styles.itemIcon}>⚡</span> {policy.name}
+                  </div>
+                ))}
+                {(!fileTree?.policies || fileTree.policies.length === 0) && (
+                  <div className={styles.emptyTreeItem}>No policies</div>
+                )}
+              </div>
+            )}
 
+            {/* Proxy Endpoints Section */}
+            <div className={styles.treeFolder} onClick={() => toggle('proxyEndpoints')}>
+              {expanded.proxyEndpoints ? <IconChevronDown size={14}/> : <IconChevronRight size={14}/>}
+              <span className={styles.folderIcon}>📁</span> Proxy Endpoints
+            </div>
+            {expanded.proxyEndpoints && (
+              <div className={styles.treeSub}>
+                {fileTree?.proxy_endpoints?.map(endpoint => (
+                  <div 
+                    key={endpoint.path}
+                    className={`${styles.treeItem} ${selectedFile?.path === endpoint.path ? styles.activeTreeItem : ''}`}
+                    onClick={() => handleSelectFile(endpoint)}
+                  >
+                    <span className={styles.itemIcon}>⚙️</span> {endpoint.name}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Target Endpoints Section */}
+            <div className={styles.treeFolder} onClick={() => toggle('targetEndpoints')}>
+              {expanded.targetEndpoints ? <IconChevronDown size={14}/> : <IconChevronRight size={14}/>}
+              <span className={styles.folderIcon}>📁</span> Target Endpoints
+            </div>
+            {expanded.targetEndpoints && (
+              <div className={styles.treeSub}>
+                {fileTree?.target_endpoints?.map(target => (
+                  <div 
+                    key={target.path}
+                    className={`${styles.treeItem} ${selectedFile?.path === target.path ? styles.activeTreeItem : ''}`}
+                    onClick={() => handleSelectFile(target)}
+                  >
+                    <span className={styles.itemIcon}>🔗</span> {target.name}
+                  </div>
+                ))}
+                {(!fileTree?.target_endpoints || fileTree.target_endpoints.length === 0) && (
+                  <div className={styles.emptyTreeItem}>No target endpoints</div>
+                )}
+              </div>
+            )}
+
+            {/* Scripts Section */}
+            <div className={styles.treeFolder} onClick={() => toggle('scripts')}>
+              {expanded.scripts ? <IconChevronDown size={14}/> : <IconChevronRight size={14}/>}
+              <span className={styles.folderIcon}>📁</span> Scripts
+            </div>
+            {expanded.scripts && (
+              <div className={styles.treeSub}>
+                 {fileTree?.scripts?.map(script => (
+                  <div 
+                    key={script.path}
+                    className={`${styles.treeItem} ${selectedFile?.path === script.path ? styles.activeTreeItem : ''}`}
+                    onClick={() => handleSelectFile(script)}
+                  >
+                    <span className={styles.itemIcon}>📄</span> {script.name}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </aside>
+
+        <div className={styles.mainArea}>
           <VisualFlowCanvas 
             selectedPolicy={selectedPolicy} 
             onSelectPolicy={handleSelectPolicy} 
+          />
+
+          <XmlEditor 
+            xmlCode={xmlCode} 
+            setXmlCode={setXmlCode} 
+            footerHeight={footerHeight}
+            onResizerMouseDown={() => { 
+              isResizing.current = true; 
+              document.body.style.cursor = 'row-resize'; 
+              document.body.style.userSelect = 'none';
+            }}
+            editorRef={editorRef}
+            isCollapsed={isEditorCollapsed}
+            onToggleCollapse={() => setIsEditorCollapsed(!isEditorCollapsed)}
+            currentFileName={selectedFile?.full_name}
           />
         </div>
 
@@ -442,19 +481,16 @@ function ProxyDetail({ proxy, onClose }) {
           onClose={() => setIsInspectorOpen(false)} 
         />
 
-        <XmlEditor 
-          xmlCode={xmlCode} 
-          setXmlCode={setXmlCode} 
-          footerHeight={footerHeight}
-          onResizerMouseDown={() => { 
-            isResizing.current = true; 
-            document.body.style.cursor = 'row-resize'; 
-            document.body.style.userSelect = 'none';
-          }}
-          editorRef={editorRef}
-          isCollapsed={isEditorCollapsed}
-          onToggleCollapse={() => setIsEditorCollapsed(!isEditorCollapsed)}
-        />
+        {!isInspectorOpen && (
+          <button 
+            className={styles.inspectorToggle} 
+            onClick={() => setIsInspectorOpen(true)}
+            title="Open Properties"
+          >
+            <IconEdit size={14} />
+            <span>Properties</span>
+          </button>
+        )}
       </div>
     </div>
   );
@@ -466,6 +502,7 @@ ProxyDetail.propTypes = {
     revision: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     lastModified: PropTypes.string
   }).isRequired,
+  fileTree: PropTypes.object,
   onClose: PropTypes.func.isRequired
 };
 

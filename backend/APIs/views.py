@@ -7,6 +7,7 @@ from rest_framework import status
 from .services import get_latest_revision_path
 from .services import get_proxy_tree
 from .services import get_proxy_file_tree
+from .services import get_proxy_file_content
 import os
 import socket
 import logging
@@ -56,6 +57,28 @@ class ProxyFileListView(APIView):
             "proxy": proxy_name,
             "total_files": len(files),
             "files": files
+        })
+
+class ProxyFileContentView(APIView):
+    """API para obtener el contenido de un archivo específico del proxy."""
+    
+    def get(self, request, proxy_name):
+        file_path = request.query_params.get('path')
+        if not file_path:
+            return Response({"error": "Se requiere el parámetro 'path'"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        content = get_proxy_file_content(proxy_name, file_path)
+        
+        if content is None:
+            return Response(
+                {"error": f"No se pudo leer el archivo '{file_path}' del proxy '{proxy_name}'"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        return Response({
+            "proxy": proxy_name,
+            "path": file_path,
+            "content": content
         })
 
 class ApigeeOrganizationApisView(APIView):
