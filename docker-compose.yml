@@ -1,28 +1,36 @@
 version: '3.8'
 
+# Definimos el volumen compartido
+volumes:
+  apigee_contracts_vol:
+
 services:
-  # 1. El Emulador Oficial de Apigee (Data Plane)
   apigee-emulator:
     image: gcr.io/apigee-release/hybrid/apigee-emulator:1.15.2
     container_name: apigee-dev
     ports:
-      # Mapeo según la arquitectura final que nos funcionó en VS Code:
-      - "8999:8080"  # Tráfico de APIs (Host: 8999 -> Container: 8080)
-      - "8445:8998"  # Control/Management (Host: 8445 -> Container: 8998)
+      - "8999:8080"
+      - "8445:8998"
     environment:
+      - TZ=America/Mexico_City
       - APIGEE_USER=test
       - APIGEE_PASSWORD=test
+    volumes:
+      # Montamos /opt/apigee del emulador hacia el volumen compartido
+      - apigee_contracts_vol:/opt/apigee
     restart: always
 
-  # 2. Nuestro Microservicio Complementario (Fake Control Plane)
   fake-management-api:
-    build: ./mock-management-api
+    build: ./backend # Asegúrate de que esto apunte a donde está tu Dockerfile de Flask
     container_name: apigee-fake-control-plane
     ports:
       - "8446:8446"
+    environment:
+      - TZ=America/Mexico_City
+      - DJANGO_SETTINGS_MODULE=core.settings
     volumes:
-      # Montamos la raíz de tu proyecto para que pueda leer deployments.json
-      - ./:/workspace
+      - ./backend:/app
+      - apigee_contracts_vol:/apigee_runtime
     depends_on:
       - apigee-emulator
     restart: always
