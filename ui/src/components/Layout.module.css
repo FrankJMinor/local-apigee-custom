@@ -16,13 +16,33 @@
   height: 50px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 4px;
   padding: 0 1.4em;
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   transition: background 0.25s, border-color 0.25s;
+}
+
+.collapseBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+  margin-right: 8px;
+}
+
+.collapseBtn:hover {
+  background: var(--bg-th);
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .iconBtn {

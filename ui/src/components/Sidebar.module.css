@@ -10,6 +10,30 @@
   top: 0;
   height: 100vh;
   overflow-y: auto;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar.collapsed {
+  width: 64px;
+}
+
+.sidebar.collapsed .logo {
+  justify-content: center;
+  padding: 1.1em 0;
+}
+
+.sidebar.collapsed .navItem {
+  justify-content: center;
+  padding: 0.8em 0;
+}
+
+.envDot {
+  width: 10px;
+  height: 10px;
+  background: #22c55e;
+  border-radius: 50%;
+  margin: 0 auto;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
 }
 
 /* ── Logo ── */

@@ -17,38 +17,47 @@ const NAV = [
   { path: '/trace',        label: 'Trace Analyzer', Icon: IconTrace },
 ]
 
-export function Sidebar() {
+export function Sidebar({ isCollapsed }) {
   const { pathname } = useLocation()
   return (
-    <nav className={styles.sidebar}>
+    <nav className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ''}`}>
       <div className={styles.logo}>
-        <IconLogo size={36} />
-        <div>
-          <div className={styles.logoName}>API Manager</div>
-          <div className={styles.logoSub}>Apigee Console</div>
-        </div>
+        <IconLogo size={isCollapsed ? 28 : 36} />
+        {!isCollapsed && (
+          <div>
+            <div className={styles.logoName}>API Manager</div>
+            <div className={styles.logoSub}>Apigee Console</div>
+          </div>
+        )}
       </div>
 
       <div className={styles.nav}>
         {NAV.map((item, i) =>
           item.section ? (
-            <p key={i} className={styles.section}>{item.section}</p>
+            !isCollapsed && <p key={i} className={styles.section}>{item.section}</p>
           ) : (
             <Link
               key={item.path}
               to={item.path}
               className={`${styles.navItem} ${pathname === item.path ? styles.active : ''}`}
+              title={isCollapsed ? item.label : ''}
             >
-              <item.Icon size={16} />
-              {item.label}
+              <item.Icon size={18} />
+              {!isCollapsed && <span>{item.label}</span>}
             </Link>
           )
         )}
       </div>
 
       <div className={styles.footer}>
-        <span className={styles.footerLabel}>Entorno</span>
-        <span className={styles.footerEnv}>prod-environment</span>
+        {isCollapsed ? (
+          <div className={styles.envDot} title="prod-environment" />
+        ) : (
+          <>
+            <span className={styles.footerLabel}>Entorno</span>
+            <span className={styles.footerEnv}>prod-environment</span>
+          </>
+        )}
       </div>
     </nav>
   )
