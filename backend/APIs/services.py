@@ -94,36 +94,48 @@ def get_latest_revision_path() -> Optional[str]:
         'src', 'main', 'apigee', 'apiproxies'
     )
     
-def get_proxy_file_tree(proxy_name: str) -> Optional[List[Dict[str, Any]]]:
-    """
-    Escanea la carpeta de un proxy específico y devuelve una lista plana 
-    de sus archivos y rutas relativas.
-    """
+def get_proxy_file_tree(proxy_name: str) -> Optional[Dict[str, Any]]:
     base_path = get_latest_revision_path()
     if not base_path:
         return None
 
-    proxy_root = os.path.join(base_path, proxy_name)
+    proxy_root = os.path.join(base_path, proxy_name, 'apiproxy') # Entramos a /apiproxy
 
     if not os.path.exists(proxy_root):
-        logger.error(f"El proxy {proxy_name} no existe en la ruta: {proxy_root}")
         return None
 
-    file_list = []
-    
-    # os.walk recorre todas las subcarpetas automáticamente
+    # Estructura inicial que espera la UI
+    tree = {
+        "proxy_name": proxy_name,
+        "policies": [],
+        "proxy_endpoints": [],
+        "target_endpoints": [],
+        "scripts": [],
+        "root_config": None
+    }
+
     for root, dirs, files in os.walk(proxy_root):
         for file in files:
-            # Obtenemos la ruta relativa para que sea fácil de leer en la UI
             full_path = os.path.join(root, file)
-            relative_path = os.path.relpath(full_path, proxy_root)
+            rel_path = os.path.relpath(full_path, proxy_root)
             
-            file_list.append({
-                "name": file,
-                "path": relative_path,
-                "type": "file",
-                "extension": os.path.splitext(file)[1]
-            })
+            file_data = {
+                "name": file.replace('.xml', ''), # Limpiamos extensión para el label
+                "full_name": file,
+                "path": rel_path,
+                "ext": os.path.splitext(file)[1]
+            }
 
-    logger.info(f"Se encontraron {len(file_list)} archivos para el proxy: {proxy_name}")
-    return file_list
+            # Categorización por carpeta
+            if 'policies' in rel_path:
+                tree["policies"].append(file_data)
+            elif 'proxies' in rel_path:
+                tree["proxy_endpoints"].append(file_data)
+            elif 'targets' in rel_path:
+                tree["target_endpoints"].append(file_data)
+            elif 'resources' in rel_path:
+                tree["scripts"].append(file_data)
+            elif rel_path == f"{proxy_name}.xml":
+                tree["root_config"] = file_data
+
+    return tree

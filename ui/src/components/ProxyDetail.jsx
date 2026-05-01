@@ -263,6 +263,7 @@ function ProxyDetail({ proxy, onClose }) {
   const handleMouseUp = useCallback(() => {
     isResizing.current = false;
     document.body.style.cursor = 'default';
+    document.body.style.userSelect = '';
     if (requestRef.current) cancelAnimationFrame(requestRef.current);
   }, []);
 
@@ -445,7 +446,11 @@ function ProxyDetail({ proxy, onClose }) {
           xmlCode={xmlCode} 
           setXmlCode={setXmlCode} 
           footerHeight={footerHeight}
-          onResizerMouseDown={() => { isResizing.current = true; document.body.style.cursor = 'row-resize'; }}
+          onResizerMouseDown={() => { 
+            isResizing.current = true; 
+            document.body.style.cursor = 'row-resize'; 
+            document.body.style.userSelect = 'none';
+          }}
           editorRef={editorRef}
           isCollapsed={isEditorCollapsed}
           onToggleCollapse={() => setIsEditorCollapsed(!isEditorCollapsed)}

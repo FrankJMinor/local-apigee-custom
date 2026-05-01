@@ -544,8 +544,48 @@
   flex-direction: column;
   position: relative;
   z-index: 10;
-  transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s;
+  transition: background 0.25s;
 }
+
+.resizer {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: row-resize;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.resizerBar {
+  width: 4px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 50%;
+  position: relative;
+  transition: background 0.2s;
+}
+
+.resizer:hover .resizerBar {
+  background: var(--accent);
+}
+
+.resizerBar::before,
+.resizerBar::after {
+  content: "";
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: inherit;
+  border-radius: 50%;
+  top: 0;
+}
+
+.resizerBar::before { left: -8px; }
+.resizerBar::after { right: -8px; }
 
 [data-theme="dark"] .codeEditor {
   background: #020617;
