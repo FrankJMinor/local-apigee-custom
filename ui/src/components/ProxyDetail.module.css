@@ -471,6 +471,21 @@
   align-items: center;
   z-index: 5;
   background: transparent;
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+
+.flowLink::after {
+  content: '';
+  position: absolute;
+  inset: -30px -10px; /* Área de drop expandida e invisible */
+  z-index: 10;
+}
+
+.dragOverActive {
+  box-shadow: 0 0 15px 4px #22d3ee !important;
+  background: rgba(34, 211, 238, 0.4) !important;
+  border: 1px solid #22d3ee !important;
 }
 
 .flowArrows {

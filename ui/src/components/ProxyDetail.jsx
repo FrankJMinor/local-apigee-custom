@@ -51,44 +51,83 @@ const getPolicyIcon = (type, className, size = 24) => {
 };
 
 // ── SUB-COMPONENT: VisualFlowCanvas ──────────────────────────────────────────
-const FlowConnection = ({ reverse = false }) => (
-  <div className={`${styles.flowLink} ${reverse ? styles.reverseFlow : ''}`}>
-    <div className={styles.gasEffect}></div>
-    <div className={styles.flowArrows}></div>
-  </div>
-);
+const FlowConnection = ({ reverse = false, track, index, dragOverInfo, setDragOverInfo, onDropPolicy }) => {
+  const isDragOver = dragOverInfo?.track === track && dragOverInfo?.index === index;
+  
+  return (
+    <div 
+      className={`${styles.flowLink} ${reverse ? styles.reverseFlow : ''} ${isDragOver ? styles.dragOverActive : ''}`}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (setDragOverInfo) setDragOverInfo({ track, index });
+      }}
+      onDragLeave={() => {
+        if (setDragOverInfo) setDragOverInfo({ track: null, index: null });
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (setDragOverInfo) setDragOverInfo({ track: null, index: null });
+        const policyName = e.dataTransfer.getData('policyName');
+        const policyType = e.dataTransfer.getData('policyType');
+        if (policyName && onDropPolicy) {
+          onDropPolicy({ name: policyName, type: policyType }, track, index);
+        }
+      }}
+    >
+      <div className={styles.gasEffect}></div>
+      <div className={styles.flowArrows}></div>
+    </div>
+  );
+};
 
 // Drag & Drop VisualFlowCanvas con diseño paralelo estilo Apigee
 const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy, requestFlowDraft, responseFlowDraft, onDropPolicy }) => {
+  const [dragOverInfo, setDragOverInfo] = useState({ track: null, index: null });
+
   const handleDragOver = (e) => e.preventDefault();
   const handleDrop = (e, target) => {
     e.preventDefault();
     const policyName = e.dataTransfer.getData('policyName');
     const policyType = e.dataTransfer.getData('policyType');
     if (policyName) onDropPolicy({ name: policyName, type: policyType }, target);
+    setDragOverInfo({ track: null, index: null });
   };
 
-  const renderTrack = (label, steps, target) => (
-    <div className={styles.flowTrack} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, target)}>
-      <div className={styles.trackPill}>{label}</div>
-      <div className={styles.trackLine}>
-        {steps.map((step, idx) => (
-          <React.Fragment key={step.id || step.name + idx}>
-            <div 
-              className={`${styles.flowStep} ${selectedPolicy?.name === step.name ? styles.activeStep : ''}`}
-              onClick={() => onSelectPolicy(step)}
-            >
-              <div className={styles.iconContainer}>
-                {getPolicyIcon(step.type, styles.trackIcon, 24)}
+  const renderTrack = (label, steps, target) => {
+    const isReverse = target === 'response';
+    return (
+      <div className={styles.flowTrack} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, target)}>
+        <div className={styles.trackPill}>{label}</div>
+        <div className={styles.trackLine}>
+          {steps.map((step, idx) => (
+            <React.Fragment key={step.id || step.name + idx}>
+              <div 
+                className={`${styles.flowStep} ${selectedPolicy?.name === step.name ? styles.activeStep : ''}`}
+                onClick={() => onSelectPolicy(step)}
+              >
+                <div className={styles.iconContainer}>
+                  {getPolicyIcon(step.type, styles.trackIcon, 24)}
+                </div>
+                <span className={styles.stepLabel}>{step.name}</span>
               </div>
-              <span className={styles.stepLabel}>{step.name}</span>
-            </div>
-            {idx < steps.length - 1 && <FlowConnection />}
-          </React.Fragment>
-        ))}
+              {idx < steps.length - 1 && (
+                <FlowConnection 
+                  reverse={isReverse} 
+                  track={target}
+                  index={idx}
+                  dragOverInfo={dragOverInfo}
+                  setDragOverInfo={setDragOverInfo}
+                  onDropPolicy={onDropPolicy}
+                />
+              )}
+            </React.Fragment>
+          ))}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const requestSteps = [
     { name: 'App', type: 'Laptop' },
@@ -396,14 +435,28 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   }, [requestFlowDraft, responseFlowDraft, selectedFile]);
 
   // Handler para drop de política
-  const handleDropPolicy = (policy, target) => {
+  const handleDropPolicy = (policy, target, index) => {
     // Crear un nuevo step con ID único para permitir duplicados y mejor manejo de listas
     const newStep = { ...policy, id: `${policy.name}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}` };
     
     if (target === 'request') {
-      setRequestFlowDraft(prev => [...prev, newStep]);
+      setRequestFlowDraft(prev => {
+        if (index !== undefined && index !== null) {
+          const newDraft = [...prev];
+          newDraft.splice(index, 0, newStep);
+          return newDraft;
+        }
+        return [...prev, newStep];
+      });
     } else if (target === 'response') {
-      setResponseFlowDraft(prev => [...prev, newStep]);
+      setResponseFlowDraft(prev => {
+        if (index !== undefined && index !== null) {
+          const newDraft = [...prev];
+          newDraft.splice(index, 0, newStep);
+          return newDraft;
+        }
+        return [...prev, newStep];
+      });
     }
   };
 
