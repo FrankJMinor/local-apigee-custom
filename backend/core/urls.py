@@ -20,8 +20,8 @@ from django.contrib import admin
 from django.urls import path
 
 # IMPORTANTE: Importamos desde 'api.views' (ruta absoluta), no desde '.'
-from APIs.views import ProxyTreeView
-from APIs.views import ProxyDeployedListView
+from APIs.views import ApigeeOrganizationApisView, ProxyTreeView
+from APIs.views import ProxyDeployedListView, ProxyFileListView
 
 
 urlpatterns = [
@@ -29,4 +29,6 @@ urlpatterns = [
     # Definimos las rutas directamente aquí como en tu proyecto viejo
     path('v1/proxies/<str:proxy_name>/tree', ProxyTreeView.as_view()),
     path('v1/proxies/deployed', ProxyDeployedListView.as_view()),
+    path('v1/proxies/<str:proxy_name>/files', ProxyFileListView.as_view()),
+    path('v1/organizations/<str:org>/apis', ApigeeOrganizationApisView.as_view()),
 ]

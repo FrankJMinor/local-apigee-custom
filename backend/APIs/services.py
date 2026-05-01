@@ -1,5 +1,5 @@
 # librerías estándar
-from typing import Optional
+from typing import List, Dict, Any, Optional
 from pathlib import Path
 import logging
 import os
@@ -93,3 +93,37 @@ def get_latest_revision_path() -> Optional[str]:
         latest, 
         'src', 'main', 'apigee', 'apiproxies'
     )
+    
+def get_proxy_file_tree(proxy_name: str) -> Optional[List[Dict[str, Any]]]:
+    """
+    Escanea la carpeta de un proxy específico y devuelve una lista plana 
+    de sus archivos y rutas relativas.
+    """
+    base_path = get_latest_revision_path()
+    if not base_path:
+        return None
+
+    proxy_root = os.path.join(base_path, proxy_name)
+
+    if not os.path.exists(proxy_root):
+        logger.error(f"El proxy {proxy_name} no existe en la ruta: {proxy_root}")
+        return None
+
+    file_list = []
+    
+    # os.walk recorre todas las subcarpetas automáticamente
+    for root, dirs, files in os.walk(proxy_root):
+        for file in files:
+            # Obtenemos la ruta relativa para que sea fácil de leer en la UI
+            full_path = os.path.join(root, file)
+            relative_path = os.path.relpath(full_path, proxy_root)
+            
+            file_list.append({
+                "name": file,
+                "path": relative_path,
+                "type": "file",
+                "extension": os.path.splitext(file)[1]
+            })
+
+    logger.info(f"Se encontraron {len(file_list)} archivos para el proxy: {proxy_name}")
+    return file_list
