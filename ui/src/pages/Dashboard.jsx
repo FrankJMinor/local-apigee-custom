@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { STATS, RECENT_ACTIVITY, SYSTEM_ALERTS } from '../data/mock'
+import { STATS as MOCK_STATS, RECENT_ACTIVITY, SYSTEM_ALERTS } from '../data/mock'
 import { timeAgo } from '../utils/format'
 import { IconActivity, IconAlert, IconRefresh } from '../components/Icons'
+import { fetchDeployedProxiesCount } from '../utils/fetchDeployedProxiesCount'
 import s from './table.module.css'
 import styles from './Dashboard.module.css'
 
@@ -26,8 +27,26 @@ function StatCard({ stat }) { // NOSONAR S6774
   )
 }
 
+
 function Dashboard() {
   const [, forceRefresh] = useState(0)
+  const [stats, setStats] = useState(MOCK_STATS)
+  const [loading, setLoading] = useState(false)
+
+  // Cargar el total de proxies desplegados al montar
+  useEffect(() => {
+    let mounted = true
+    setLoading(true)
+    fetchDeployedProxiesCount().then(total => {
+      if (mounted) {
+        setStats(prev => prev.map(stat =>
+          stat.label === 'API Proxies' ? { ...stat, value: total } : stat
+        ))
+        setLoading(false)
+      }
+    })
+    return () => { mounted = false }
+  }, [])
 
   return (
     <div>
@@ -45,7 +64,7 @@ function Dashboard() {
       </div>
 
       <div className={styles.statsRow}>
-        {STATS.map(stat => <StatCard key={stat.label} stat={stat} />)}
+        {stats.map(stat => <StatCard key={stat.label} stat={stat} />)}
       </div>
 
       <div className={styles.panels}>
