@@ -1,11 +1,54 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
+import Editor, { loader } from '@monaco-editor/react';
 import { 
   IconRocket, IconRefresh, IconTrace, IconActivity, IconEdit, 
   IconChevronRight, IconChevronDown, IconX, IconCheck, 
   IconVerifyAPIKey, IconQuota, IconXMLJSON, IconSpikeArrest,
   IconKVM, IconDiana, IconSet, IconCloud, IconLaptop
 } from './Icons';
+
+// Configuración global de Monaco para Apigee (Rhino/ES5)
+const APIGEE_JS_TYPES = `
+  /** El objeto context de Apigee para acceder a variables de flujo */
+  declare const context: {
+    getVariable(name: string): any;
+    setVariable(name: string, value: any): void;
+    removeVariable(name: string): void;
+  };
+  /** El objeto request entrante */
+  declare const request: {
+    content: string;
+    headers: { [key: string]: string };
+    queryParams: { [key: string]: string };
+    verb: string;
+    url: string;
+  };
+  /** El objeto response saliente */
+  declare const response: {
+    content: string;
+    headers: { [key: string]: string };
+    status: number;
+  };
+  /** Función print para debug en logs de Apigee */
+  declare function print(message: any): void;
+`;
+
+loader.init().then(monaco => {
+  // Configurar JS para que sea compatible con Rhino (ES5)
+  monaco.languages.javascript.javascriptDefaults.setCompilerOptions({
+    target: monaco.languages.javascript.ScriptTarget.ES5,
+    allowNonTsExtensions: true,
+    noLib: true, // Evitar sugerencias de Browser/Node que no existen en Rhino
+    checkJs: true
+  });
+
+  // Inyectar tipos de Apigee
+  monaco.languages.javascript.javascriptDefaults.addExtraLib(
+    APIGEE_JS_TYPES,
+    'ts:filename/apigee.d.ts'
+  );
+});
 import AssignMessageSVG from '../../icons/AssignMessage.svg';
 import KeyValueMapOperationsSVG from '../../icons/KeyValueMapOperations.svg';
 import styles from './ProxyDetail.module.css';
@@ -238,9 +281,9 @@ PolicyInspector.propTypes = {
   onClose: PropTypes.func.isRequired
 };
 
-// ── SUB-COMPONENT: XmlEditor ─────────────────────────────────────────────────
-const XmlEditor = ({ xmlCode, setXmlCode, footerHeight, onResizerMouseDown, editorRef, isCollapsed, onToggleCollapse, currentFileName }) => {
-  const lineNumbers = xmlCode.split('\n').map((_, i) => i + 1);
+// ── SUB-COMPONENT: CodeEditor (Reemplaza a XmlEditor) ───────────────────────
+const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollapsed, onToggleCollapse, currentFileName }) => {
+  const language = currentFileName?.endsWith('.js') ? 'javascript' : 'xml';
 
   return (
     <footer className={`${styles.codeEditor} ${isCollapsed ? styles.editorCollapsed : ''}`} style={{ height: isCollapsed ? '36px' : `${footerHeight}px` }}>
@@ -268,20 +311,24 @@ const XmlEditor = ({ xmlCode, setXmlCode, footerHeight, onResizerMouseDown, edit
       </div>
 
       {!isCollapsed && (
-        <div className={styles.codeViewport}>
-          <div className={styles.lineNumbers}>
-            {lineNumbers.map(n => <div key={n}>{n}</div>)}
-          </div>
-          <textarea
-            ref={editorRef}
-            className={styles.xmlTextArea}
-            value={xmlCode}
-            onChange={(e) => setXmlCode(e.target.value)}
-            spellCheck="false"
-            wrap="off"
-            onScroll={(e) => {
-              const lineNumbersDiv = e.target.previousSibling;
-              if (lineNumbersDiv) lineNumbersDiv.scrollTop = e.target.scrollTop;
+        <div className={styles.codeViewport} style={{ padding: 0, overflow: 'hidden' }}>
+          <Editor
+            height="100%"
+            language={language}
+            theme="vs-dark"
+            value={code}
+            onChange={(val) => setCode(val)}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 13,
+              fontFamily: "'Fira Code', 'Cascadia Code', monospace",
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
+              tabSize: 4,
+              wordWrap: 'on',
+              lineNumbersMinChars: 3,
+              glyphMargin: false,
+              folding: true
             }}
           />
         </div>
@@ -290,12 +337,11 @@ const XmlEditor = ({ xmlCode, setXmlCode, footerHeight, onResizerMouseDown, edit
   );
 };
 
-XmlEditor.propTypes = {
-  xmlCode: PropTypes.string.isRequired,
-  setXmlCode: PropTypes.func.isRequired,
+CodeEditor.propTypes = {
+  code: PropTypes.string.isRequired,
+  setCode: PropTypes.func.isRequired,
   footerHeight: PropTypes.number.isRequired,
   onResizerMouseDown: PropTypes.func.isRequired,
-  editorRef: PropTypes.oneOfType([PropTypes.func, PropTypes.shape({ current: PropTypes.any })]),
   isCollapsed: PropTypes.bool.isRequired,
   onToggleCollapse: PropTypes.func.isRequired,
   currentFileName: PropTypes.string
@@ -918,9 +964,9 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             isTarget={selectedFile?.type === 'TargetEndpoint'}
           />
 
-          <XmlEditor 
-            xmlCode={xmlCode} 
-            setXmlCode={(newVal) => {
+          <CodeEditor 
+            code={xmlCode} 
+            setCode={(newVal) => {
               setXmlCode(newVal);
               if (selectedFile) {
                 setFileCache(prev => ({ ...prev, [selectedFile.path]: newVal }));
@@ -932,7 +978,6 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
               document.body.style.cursor = 'row-resize'; 
               document.body.style.userSelect = 'none';
             }}
-            editorRef={editorRef}
             isCollapsed={isEditorCollapsed}
             onToggleCollapse={() => setIsEditorCollapsed(!isEditorCollapsed)}
             currentFileName={selectedFile?.full_name}

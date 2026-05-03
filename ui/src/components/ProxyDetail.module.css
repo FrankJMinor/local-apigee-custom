@@ -925,11 +925,7 @@
   flex: 1;
   overflow: hidden;
   display: flex;
-  background: #ffffff;
-}
-
-[data-theme="dark"] .codeViewport {
-  background: #020617;
+  background: #1e1e1e; /* Fondo de Monaco vs-dark */
 }
 
 .lineNumbers {
