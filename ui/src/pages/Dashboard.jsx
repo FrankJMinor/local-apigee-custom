@@ -33,19 +33,21 @@ function Dashboard() {
   const [stats, setStats] = useState(MOCK_STATS)
   const [loading, setLoading] = useState(false)
 
-  // Cargar el total de proxies desplegados al montar
-  useEffect(() => {
-    let mounted = true
+
+  // Función para cargar el total de proxies desplegados
+  const loadProxiesCount = () => {
     setLoading(true)
     fetchDeployedProxiesCount().then(total => {
-      if (mounted) {
-        setStats(prev => prev.map(stat =>
-          stat.label === 'API Proxies' ? { ...stat, value: total } : stat
-        ))
-        setLoading(false)
-      }
+      setStats(prev => prev.map(stat =>
+        stat.label === 'API Proxies' ? { ...stat, value: total } : stat
+      ))
+      setLoading(false)
     })
-    return () => { mounted = false }
+  }
+
+  useEffect(() => {
+    loadProxiesCount()
+    // eslint-disable-next-line
   }, [])
 
   return (
@@ -56,8 +58,8 @@ function Dashboard() {
           <p className={s.pageSub}>Vista general de tu entorno de API Management.</p>
         </div>
         <div className={s.pageActions}>
-          <button className={s.btnSecondary} onClick={() => forceRefresh(n => n + 1)}>
-            <IconRefresh size={15} /> Actualizar
+          <button className={s.btnSecondary} onClick={loadProxiesCount} disabled={loading}>
+            <IconRefresh size={15} /> {loading ? 'Actualizando...' : 'Actualizar'}
           </button>
           <button className={s.btnPrimary}>+ Nuevo Proxy</button>
         </div>

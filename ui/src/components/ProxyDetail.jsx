@@ -309,6 +309,54 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     xsl: false
   });
 
+  // Arrastre de la pestaña de Properties
+  const [inspectorTop, setInspectorTop] = useState(null);
+  const [isDraggingInspector, setIsDraggingInspector] = useState(false);
+  const dragStartY = useRef(0);
+  const dragStartTop = useRef(0);
+  const hasMovedInspector = useRef(false);
+  const workspaceRef = useRef(null);
+
+  const handleInspectorMouseDown = (e) => {
+    setIsDraggingInspector(true);
+    dragStartY.current = e.clientY;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const workspaceRect = workspaceRef.current.getBoundingClientRect();
+    dragStartTop.current = rect.top - workspaceRect.top;
+    hasMovedInspector.current = false;
+    e.stopPropagation();
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isDraggingInspector) return;
+      const deltaY = e.clientY - dragStartY.current;
+      if (Math.abs(deltaY) > 5) {
+        hasMovedInspector.current = true;
+      }
+      
+      const workspaceHeight = workspaceRef.current.offsetHeight;
+      const nextTop = dragStartTop.current + deltaY;
+      
+      // Limitar el movimiento dentro del workspace
+      const boundedTop = Math.max(10, Math.min(nextTop, workspaceHeight - 120));
+      setInspectorTop(boundedTop);
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingInspector(false);
+    };
+
+    if (isDraggingInspector) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingInspector]);
+
   // Efecto inicial para cargar el root_config (HelloWorld.xml)
   useEffect(() => {
     if (fileTree?.root_config) {
@@ -512,7 +560,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
       </nav>
 
       {/* Main Workspace */}
-      <div className={styles.workspace}>
+      <div className={styles.workspace} ref={workspaceRef}>
         <aside className={styles.navigator}>
           <div className={styles.navHeader}>Project Explorer</div>
           <div className={styles.navTree}>
@@ -663,7 +711,13 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
         {!isInspectorOpen && (
           <button 
             className={styles.inspectorToggle} 
-            onClick={() => setIsInspectorOpen(true)}
+            onMouseDown={handleInspectorMouseDown}
+            onClick={() => {
+              if (!hasMovedInspector.current) {
+                setIsInspectorOpen(true);
+              }
+            }}
+            style={inspectorTop !== null ? { top: inspectorTop, transform: 'none' } : {}}
             title="Open Properties"
           >
             <IconEdit size={14} />
