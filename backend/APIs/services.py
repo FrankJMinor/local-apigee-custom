@@ -130,12 +130,21 @@ def get_proxy_file_tree(proxy_name: str) -> Optional[Dict[str, Any]]:
             full_path = os.path.join(root, file)
             rel_path = os.path.relpath(full_path, proxy_root)
             
+            # Intentamos leer el contenido del archivo para precargarlo en la UI
+            content = ""
+            try:
+                with open(full_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+            except Exception as e:
+                logger.error(f"Error al leer contenido de {file}: {e}")
+
             file_data = {
                 "name": file.replace('.xml', ''), # Limpiamos extensión para el label
                 "full_name": file,
                 "path": rel_path,
                 "ext": os.path.splitext(file)[1],
-                "type": get_policy_type(full_path) if file.endswith('.xml') else "Unknown"
+                "type": get_policy_type(full_path) if file.endswith('.xml') else "Unknown",
+                "content": content
             }
 
             # Categorización por carpeta
