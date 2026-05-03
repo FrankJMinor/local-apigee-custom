@@ -83,7 +83,7 @@ const FlowConnection = ({ reverse = false, track, index, dragOverInfo, setDragOv
 };
 
 // Drag & Drop VisualFlowCanvas con diseño paralelo estilo Apigee
-const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy, requestFlowDraft, responseFlowDraft, onDropPolicy, onRemovePolicy }) => {
+const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy, requestFlowDraft, responseFlowDraft, onDropPolicy, onRemovePolicy, isTarget }) => {
   const [dragOverInfo, setDragOverInfo] = useState({ track: null, index: null });
 
   const handleDragOver = (e) => e.preventDefault();
@@ -102,7 +102,7 @@ const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy, requestFlowDraft, re
         <div className={styles.trackPill}>{label}</div>
         <div className={styles.trackLine}>
           {steps.map((step, idx) => {
-            const isEndpoint = step.name === 'App' || step.name === 'Target';
+            const isEndpoint = step.name === 'App' || step.name === 'Target' || step.name === 'Backend';
             return (
               <React.Fragment key={step.id || step.name + idx}>
                 <div 
@@ -144,17 +144,13 @@ const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy, requestFlowDraft, re
     );
   };
 
-  const requestSteps = [
-    { name: 'App', type: 'Laptop' },
-    ...requestFlowDraft,
-    { name: 'Target', type: 'Cloud' }
-  ];
+  const requestSteps = isTarget 
+    ? [{ name: 'Proxy', type: 'Set' }, ...requestFlowDraft, { name: 'Backend', type: 'Cloud' }]
+    : [{ name: 'App', type: 'Laptop' }, ...requestFlowDraft, { name: 'Target', type: 'Cloud' }];
 
-  const responseSteps = [
-    { name: 'Target', type: 'Cloud' },
-    ...responseFlowDraft,
-    { name: 'App', type: 'Laptop' }
-  ];
+  const responseSteps = isTarget
+    ? [{ name: 'Backend', type: 'Cloud' }, ...responseFlowDraft, { name: 'Proxy', type: 'Set' }]
+    : [{ name: 'Target', type: 'Cloud' }, ...responseFlowDraft, { name: 'App', type: 'Laptop' }];
 
   return (
     <main className={styles.flowDesigner}>
@@ -312,10 +308,46 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   const [navigatorWidth, setNavigatorWidth] = useState(260);
   const [selectedPolicy, setSelectedPolicy] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFlow, setSelectedFlow] = useState({ name: 'PreFlow', method: 'ALL' });
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [isEditorCollapsed, setIsEditorCollapsed] = useState(false);
   const [xmlCode, setXmlCode] = useState('');
   const [fileCache, setFileCache] = useState({}); // Cache para persistir cambios entre archivos
+
+  // Extraer flujos de un XML de Endpoint
+  const getFlowsFromXml = (xml) => {
+    if (!xml) return [];
+    const flows = [];
+    
+    // 1. PreFlow
+    if (xml.includes('<PreFlow')) flows.push({ name: 'PreFlow', method: 'ALL' });
+    
+    // 2. Flows condicionales - Extraer nombre y método (si existe en Condition)
+    const flowRegex = /<Flow name="(.*?)">/gi;
+    let match;
+    while ((match = flowRegex.exec(xml)) !== null) {
+      const flowName = match[1];
+      // Buscar el bloque de este flujo para encontrar el método
+      const blockRegex = new RegExp(`<Flow name="${flowName}">([\\s\\S]*?)<\\/Flow>`, 'i');
+      const blockMatch = xml.match(blockRegex);
+      let method = 'ALL';
+      
+      if (blockMatch) {
+        const condition = blockMatch[1].match(/<Condition>[\s\S]*?request\.verb\s*=\s*"(.*?)"[\s\S]*?<\/Condition>/i);
+        if (condition) method = condition[1].toUpperCase();
+      }
+
+      flows.push({ name: flowName, method });
+    }
+
+    // 3. PostFlow
+    if (xml.includes('<PostFlow')) flows.push({ name: 'PostFlow', method: 'ALL' });
+    
+    // 4. PostClientFlow (solo en ProxyEndpoints)
+    if (xml.includes('<PostClientFlow')) flows.push({ name: 'PostClientFlow', method: 'ALL' });
+    
+    return flows;
+  };
 
   // Inicializar cache con los contenidos que ya vienen del backend
   useEffect(() => {
@@ -464,6 +496,13 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   const handleSelectFile = async (file) => {
     setSelectedFile(file);
     
+    // Si seleccionamos un endpoint, por defecto seleccionamos PreFlow
+    if (file.type === 'ProxyEndpoint' || file.type === 'TargetEndpoint') {
+      setSelectedFlow({ name: 'PreFlow', method: 'ALL' });
+    } else {
+      setSelectedFlow(null);
+    }
+    
     // 1. Prioridad: Usar el contenido que ya viene en el objeto (del backend)
     const initialContent = file.content !== undefined ? file.content : fileCache[file.path];
     
@@ -525,23 +564,42 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   const [requestFlowDraft, setRequestFlowDraft] = useState([]);
   const [responseFlowDraft, setResponseFlowDraft] = useState([]);
 
-  // Actualizar el draft cuando se selecciona un ProxyEndpoint
+  // Actualizar el draft cuando se selecciona un ProxyEndpoint o TargetEndpoint o cambia el flujo
   useEffect(() => {
-    if (selectedFile && selectedFile.type === 'ProxyEndpoint') {
-      const content = selectedFile.content !== undefined ? selectedFile.content : fileCache[selectedFile.path];
-      if (content) {
-        // Simple parser regex para obtener los steps del PreFlow (ejemplo básico)
-        const getSteps = (xml, type) => {
-          const regex = new RegExp(`<${type}>[\\s\\S]*?<Request>([\\s\\S]*?)<\\/Request>[\\s\\S]*?<Response>([\\s\\S]*?)<\\/Response>`, 'i');
-          const match = xml.match(regex);
-          if (!match) return { req: [], res: [] };
+    if (selectedFile && (selectedFile.type === 'ProxyEndpoint' || selectedFile.type === 'TargetEndpoint')) {
+      // Prioridad: Usar primero lo que está en caché (cambios locales), luego el contenido original
+      const content = fileCache[selectedFile.path] || selectedFile.content || "";
+      
+      if (content && selectedFlow) {
+        // Parser para obtener steps de UN flujo específico
+        const getStepsFromFlow = (xml, flowName) => {
+          let flowContent = "";
           
-          const stepRegex = /<Step>\s*<Name>(.*?)<\/Name>\s*<\/Step>/g;
-          const parseSteps = (str) => {
+          if (flowName === 'PreFlow') {
+            const match = xml.match(/<PreFlow[\s\S]*?>([\s\S]*?)<\/PreFlow>/i);
+            if (match) flowContent = match[1];
+          } else if (flowName === 'PostFlow') {
+            const match = xml.match(/<PostFlow[\s\S]*?>([\s\S]*?)<\/PostFlow>/i);
+            if (match) flowContent = match[1];
+          } else if (flowName === 'PostClientFlow') {
+            const match = xml.match(/<PostClientFlow[\s\S]*?>([\s\S]*?)<\/PostClientFlow>/i);
+            if (match) flowContent = match[1];
+          } else {
+            const match = xml.match(new RegExp(`<Flow name="${flowName}">([\\s\\S]*?)<\\/Flow>`, 'i'));
+            if (match) flowContent = match[1];
+          }
+
+          const parseSection = (xmlStr, sectionTag) => {
+            if (!xmlStr) return [];
             const steps = [];
+            const sectionRegex = new RegExp(`<${sectionTag}>([\\s\\S]*?)<\\/${sectionTag}>`, 'i');
+            const sectionMatch = xmlStr.match(sectionRegex);
+            if (!sectionMatch) return [];
+            
+            const stepRegex = /<Step>\s*<Name>(.*?)<\/Name>\s*<\/Step>/g;
+            const sectionContent = sectionMatch[1];
             let sMatch;
-            while ((sMatch = stepRegex.exec(str)) !== null) {
-              // Buscamos el tipo en la lista de políticas disponibles
+            while ((sMatch = stepRegex.exec(sectionContent)) !== null) {
               const policyName = sMatch[1];
               const policyInfo = fileTree?.policies?.find(p => p.name === policyName);
               steps.push({ 
@@ -554,40 +612,51 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
           };
 
           return {
-            req: parseSteps(match[1]),
-            res: parseSteps(match[2])
+            req: parseSection(flowContent, 'Request'),
+            res: parseSection(flowContent, 'Response')
           };
         };
 
-        const { req, res } = getSteps(content, 'PreFlow');
+        const { req, res } = getStepsFromFlow(content, selectedFlow.name);
         setRequestFlowDraft(req);
         setResponseFlowDraft(res);
       }
-    }
-  }, [selectedFile, fileCache, fileTree]);
-
-  // Función para actualizar SOLO la sección PreFlow del XML sin destruir el resto del archivo
-  const syncDraftToXml = (requestSteps, responseSteps) => {
-    if (!selectedFile || selectedFile.type !== 'ProxyEndpoint') return;
-    
-    const currentXml = xmlCode || selectedFile.content || "";
-    
-    // Generar el nuevo bloque <PreFlow>
-    let newPreFlow = `  <PreFlow name="PreFlow">\n        <Request>`;
-    requestSteps.forEach(p => { newPreFlow += `\n            <Step>\n                <Name>${p.name}</Name>\n            </Step>`; });
-    newPreFlow += `\n        </Request>\n        <Response>`;
-    responseSteps.forEach(p => { newPreFlow += `\n            <Step>\n                <Name>${p.name}</Name>\n            </Step>`; });
-    newPreFlow += `\n        </Response>\n    </PreFlow>`;
-
-    // Reemplazar selectivamente usando regex para no perder FaultRules, Flows, etc.
-    const preFlowRegex = /<PreFlow[\s\S]*?<\/PreFlow>/i;
-    let updatedXml = currentXml;
-    
-    if (preFlowRegex.test(currentXml)) {
-      updatedXml = currentXml.replace(preFlowRegex, newPreFlow);
     } else {
-      // Si no existe (raro), lo insertamos antes de <HTTPProxyConnection> o <Flows>
-      updatedXml = currentXml.replace(/<HTTPProxyConnection>/i, `${newPreFlow}\n    <HTTPProxyConnection>`);
+      setRequestFlowDraft([]);
+      setResponseFlowDraft([]);
+    }
+  }, [selectedFile, selectedFlow, fileCache, fileTree]);
+
+  // Función para actualizar SOLO la sección del flujo seleccionado en el XML
+  const syncDraftToXml = (requestSteps, responseSteps) => {
+    if (!selectedFile || !selectedFlow) return;
+    
+    // Usar el XML actual de la caché si existe, si no el original
+    const currentXml = fileCache[selectedFile.path] || selectedFile.content || "";
+    
+    // Generar el nuevo bloque de Request/Response
+    let newReq = "        <Request>";
+    requestSteps.forEach(p => { newReq += `\n            <Step>\n                <Name>${p.name}</Name>\n            </Step>`; });
+    newReq += "\n        </Request>";
+
+    let newRes = "        <Response>";
+    responseSteps.forEach(p => { newRes += `\n            <Step>\n                <Name>${p.name}</Name>\n            </Step>`; });
+    newRes += "\n        </Response>";
+
+    let updatedXml = currentXml;
+
+    if (selectedFlow.name === 'PreFlow') {
+      const regex = /(<PreFlow[\s\S]*?>)[\s\S]*?(<\/PreFlow>)/i;
+      updatedXml = currentXml.replace(regex, `$1\n${newReq}\n${newRes}\n    $2`);
+    } else if (selectedFlow.name === 'PostFlow') {
+      const regex = /(<PostFlow[\s\S]*?>)[\s\S]*?(<\/PostFlow>)/i;
+      updatedXml = currentXml.replace(regex, `$1\n${newReq}\n${newRes}\n    $2`);
+    } else if (selectedFlow.name === 'PostClientFlow') {
+      const regex = /(<PostClientFlow[\s\S]*?>)[\s\S]*?(<\/PostClientFlow>)/i;
+      updatedXml = currentXml.replace(regex, `$1\n${newRes}\n    $2`); // PostClientFlow solo tiene Response
+    } else {
+      const regex = new RegExp(`(<Flow name="${selectedFlow.name}">)[\\s\\S]*?(<\\/Flow>)`, 'i');
+      updatedXml = currentXml.replace(regex, `$1\n${newReq}\n${newRes}\n    $2`);
     }
 
     setXmlCode(updatedXml);
@@ -742,13 +811,30 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
               <div className={styles.treeSub}>
                 {Array.isArray(fileTree?.proxy_endpoints) && fileTree.proxy_endpoints.length > 0 ? (
                   fileTree.proxy_endpoints.map(endpoint => (
-                    <div 
-                      key={endpoint.path}
-                      className={`${styles.treeItem} ${selectedFile?.path === endpoint.path ? styles.activeTreeItem : ''}`}
-                      onClick={() => handleSelectFile(endpoint)}
-                    >
-                      <span className={styles.itemIcon}>⚙️</span> {endpoint.name}
-                    </div>
+                    <React.Fragment key={endpoint.path}>
+                      <div 
+                        className={`${styles.treeItem} ${selectedFile?.path === endpoint.path && !selectedFlow ? styles.activeTreeItem : ''}`}
+                        onClick={() => handleSelectFile(endpoint)}
+                      >
+                        <span className={styles.itemIcon}>⚙️</span> {endpoint.name}
+                      </div>
+                      {selectedFile?.path === endpoint.path && (
+                        <div className={styles.treeSub}>
+                          {getFlowsFromXml(selectedFile.content || fileCache[selectedFile.path] || "").map(flow => (
+                            <div 
+                              key={flow.name}
+                              className={`${styles.flowItem} ${selectedFlow?.name === flow.name ? styles.activeFlowItem : ''}`}
+                              onClick={() => setSelectedFlow(flow)}
+                            >
+                              <span className={`${styles.methodBadge} ${styles['method' + flow.method]}`}>
+                                {flow.method}
+                              </span>
+                              <span className={styles.flowName}>{flow.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </React.Fragment>
                   ))
                 ) : (
                   <div className={styles.emptyTreeItem}>No proxy endpoints</div>
@@ -765,13 +851,30 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
               <div className={styles.treeSub}>
                 {Array.isArray(fileTree?.target_endpoints) && fileTree.target_endpoints.length > 0 ? (
                   fileTree.target_endpoints.map(target => (
-                    <div 
-                      key={target.path}
-                      className={`${styles.treeItem} ${selectedFile?.path === target.path ? styles.activeTreeItem : ''}`}
-                      onClick={() => handleSelectFile(target)}
-                    >
-                      <span className={styles.itemIcon}>🔗</span> {target.name}
-                    </div>
+                    <React.Fragment key={target.path}>
+                      <div 
+                        className={`${styles.treeItem} ${selectedFile?.path === target.path && !selectedFlow ? styles.activeTreeItem : ''}`}
+                        onClick={() => handleSelectFile(target)}
+                      >
+                        <span className={styles.itemIcon}>🔗</span> {target.name}
+                      </div>
+                      {selectedFile?.path === target.path && (
+                        <div className={styles.treeSub}>
+                          {getFlowsFromXml(selectedFile.content || fileCache[selectedFile.path] || "").map(flow => (
+                            <div 
+                              key={flow.name}
+                              className={`${styles.flowItem} ${selectedFlow?.name === flow.name ? styles.activeFlowItem : ''}`}
+                              onClick={() => setSelectedFlow(flow)}
+                            >
+                              <span className={`${styles.methodBadge} ${styles['method' + flow.method]}`}>
+                                {flow.method}
+                              </span>
+                              <span className={styles.flowName}>{flow.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </React.Fragment>
                   ))
                 ) : (
                   <div className={styles.emptyTreeItem}>No target endpoints</div>
@@ -812,6 +915,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             responseFlowDraft={responseFlowDraft}
             onDropPolicy={handleDropPolicy}
             onRemovePolicy={handleRemovePolicy}
+            isTarget={selectedFile?.type === 'TargetEndpoint'}
           />
 
           <XmlEditor 
