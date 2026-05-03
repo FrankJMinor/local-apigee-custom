@@ -317,6 +317,30 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   const [xmlCode, setXmlCode] = useState('');
   const [fileCache, setFileCache] = useState({}); // Cache para persistir cambios entre archivos
 
+  // Inicializar cache con los contenidos que ya vienen del backend
+  useEffect(() => {
+    if (fileTree) {
+      const newCache = {};
+      const traverse = (files) => {
+        if (!files) return;
+        files.forEach(f => {
+          if (f.path) newCache[f.path] = f.content || "";
+        });
+      };
+      
+      // El root config
+      if (fileTree.root_config) newCache[fileTree.root_config.path] = fileTree.root_config.content || "";
+      
+      // Las carpetas
+      traverse(fileTree.policies);
+      traverse(fileTree.proxy_endpoints);
+      traverse(fileTree.target_endpoints);
+      traverse(fileTree.scripts);
+      
+      setFileCache(newCache);
+    }
+  }, [fileTree]);
+
   const [expanded, setExpanded] = useState({
     policies: true,
     proxyEndpoints: true,
@@ -440,21 +464,25 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   const handleSelectFile = async (file) => {
     setSelectedFile(file);
     
-    // Si ya tenemos el contenido en cache (editado o previamente cargado), lo usamos
-    if (fileCache[file.path]) {
-      setXmlCode(fileCache[file.path]);
+    // 1. Prioridad: Usar el contenido que ya viene en el objeto (del backend)
+    const initialContent = file.content !== undefined ? file.content : fileCache[file.path];
+    
+    if (initialContent !== undefined) {
+      setXmlCode(initialContent);
       
-      // Si es una política, actualizamos la selección pero respetamos si el inspector está cerrado
+      // Asegurar que esté en cache para persistencia de ediciones
+      if (fileCache[file.path] === undefined) {
+        setFileCache(prev => ({ ...prev, [file.path]: initialContent }));
+      }
+
+      // Si es una política, actualizamos la selección
       if (file.path.includes('policies')) {
         setSelectedPolicy({ name: file.name, type: file.type || 'Mediation' });
       }
       return;
     }
 
-    if (file.path.includes('policies')) {
-      setSelectedPolicy({ name: file.name, type: file.type || 'Mediation' });
-    }
-
+    // 2. Fallback: Carga manual (si por alguna razón no venía en el tree)
     try {
       const response = await fetch(`http://localhost:8446/v1/proxies/${proxy.name}/content?path=${encodeURIComponent(file.path)}`);
       const data = await response.json();
@@ -497,62 +525,115 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   const [requestFlowDraft, setRequestFlowDraft] = useState([]);
   const [responseFlowDraft, setResponseFlowDraft] = useState([]);
 
-  // Actualiza el XML mostrado en el editor según el draft
+  // Actualizar el draft cuando se selecciona un ProxyEndpoint
   useEffect(() => {
-    // Solo si el archivo seleccionado es un ProxyEndpoint
     if (selectedFile && selectedFile.type === 'ProxyEndpoint') {
-      // Generar XML con los steps del draft
-      let xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<ProxyEndpoint name="${selectedFile.name}">\n  <PreFlow>\n    <Request>`;
-      requestFlowDraft.forEach(policy => {
-        xml += `\n      <Step><Name>${policy.name}</Name></Step>`;
-      });
-      xml += `\n    </Request>\n    <Response>`;
-      responseFlowDraft.forEach(policy => {
-        xml += `\n      <Step><Name>${policy.name}</Name></Step>`;
-      });
-      xml += `\n    </Response>\n  </PreFlow>\n  <HTTPProxyConnection>\n    <BasePath>/v1/hello</BasePath>\n  </HTTPProxyConnection>\n  <RouteRule name="default">\n    <TargetEndpoint>default</TargetEndpoint>\n  </RouteRule>\n</ProxyEndpoint>`;
-      
-      setXmlCode(xml);
-      // Sincronizar con la cache para que al volver de otro archivo se mantenga
-      setFileCache(prev => ({ ...prev, [selectedFile.path]: xml }));
+      const content = selectedFile.content !== undefined ? selectedFile.content : fileCache[selectedFile.path];
+      if (content) {
+        // Simple parser regex para obtener los steps del PreFlow (ejemplo básico)
+        const getSteps = (xml, type) => {
+          const regex = new RegExp(`<${type}>[\\s\\S]*?<Request>([\\s\\S]*?)<\\/Request>[\\s\\S]*?<Response>([\\s\\S]*?)<\\/Response>`, 'i');
+          const match = xml.match(regex);
+          if (!match) return { req: [], res: [] };
+          
+          const stepRegex = /<Step>\s*<Name>(.*?)<\/Name>\s*<\/Step>/g;
+          const parseSteps = (str) => {
+            const steps = [];
+            let sMatch;
+            while ((sMatch = stepRegex.exec(str)) !== null) {
+              // Buscamos el tipo en la lista de políticas disponibles
+              const policyName = sMatch[1];
+              const policyInfo = fileTree?.policies?.find(p => p.name === policyName);
+              steps.push({ 
+                name: policyName, 
+                type: policyInfo?.type || 'Mediation',
+                id: `${policyName}-${Math.random().toString(36).substr(2, 9)}`
+              });
+            }
+            return steps;
+          };
+
+          return {
+            req: parseSteps(match[1]),
+            res: parseSteps(match[2])
+          };
+        };
+
+        const { req, res } = getSteps(content, 'PreFlow');
+        setRequestFlowDraft(req);
+        setResponseFlowDraft(res);
+      }
     }
-  }, [requestFlowDraft, responseFlowDraft, selectedFile]);
+  }, [selectedFile, fileCache, fileTree]);
+
+  // Función para actualizar SOLO la sección PreFlow del XML sin destruir el resto del archivo
+  const syncDraftToXml = (requestSteps, responseSteps) => {
+    if (!selectedFile || selectedFile.type !== 'ProxyEndpoint') return;
+    
+    const currentXml = xmlCode || selectedFile.content || "";
+    
+    // Generar el nuevo bloque <PreFlow>
+    let newPreFlow = `  <PreFlow name="PreFlow">\n        <Request>`;
+    requestSteps.forEach(p => { newPreFlow += `\n            <Step>\n                <Name>${p.name}</Name>\n            </Step>`; });
+    newPreFlow += `\n        </Request>\n        <Response>`;
+    responseSteps.forEach(p => { newPreFlow += `\n            <Step>\n                <Name>${p.name}</Name>\n            </Step>`; });
+    newPreFlow += `\n        </Response>\n    </PreFlow>`;
+
+    // Reemplazar selectivamente usando regex para no perder FaultRules, Flows, etc.
+    const preFlowRegex = /<PreFlow[\s\S]*?<\/PreFlow>/i;
+    let updatedXml = currentXml;
+    
+    if (preFlowRegex.test(currentXml)) {
+      updatedXml = currentXml.replace(preFlowRegex, newPreFlow);
+    } else {
+      // Si no existe (raro), lo insertamos antes de <HTTPProxyConnection> o <Flows>
+      updatedXml = currentXml.replace(/<HTTPProxyConnection>/i, `${newPreFlow}\n    <HTTPProxyConnection>`);
+    }
+
+    setXmlCode(updatedXml);
+    setFileCache(prev => ({ ...prev, [selectedFile.path]: updatedXml }));
+  };
 
   // Handler para drop de política
   const handleDropPolicy = (policy, target, index) => {
-    // Crear un nuevo step con ID único para permitir duplicados y mejor manejo de listas
-    const newStep = { ...policy, id: `${policy.name}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}` };
+    // Crear un nuevo step con ID único
+    const newStep = { ...policy, id: `${policy.name}-${Date.now()}` };
     
+    let nextReq = [...requestFlowDraft];
+    let nextRes = [...responseFlowDraft];
+
     if (target === 'request') {
-      setRequestFlowDraft(prev => {
-        if (index !== undefined && index !== null) {
-          const newDraft = [...prev];
-          newDraft.splice(index, 0, newStep);
-          return newDraft;
-        }
-        return [...prev, newStep];
-      });
+      if (index !== undefined && index !== null) nextReq.splice(index, 0, newStep);
+      else nextReq.push(newStep);
+      setRequestFlowDraft(nextReq);
     } else if (target === 'response') {
-      setResponseFlowDraft(prev => {
-        if (index !== undefined && index !== null) {
-          const newDraft = [...prev];
-          newDraft.splice(index, 0, newStep);
-          return newDraft;
-        }
-        return [...prev, newStep];
-      });
+      if (index !== undefined && index !== null) nextRes.splice(index, 0, newStep);
+      else nextRes.push(newStep);
+      setResponseFlowDraft(nextRes);
     }
+
+    // Sincronizar al XML inmediatamente
+    syncDraftToXml(nextReq, nextRes);
   };
 
   const handleRemovePolicy = (policyToRemove, target) => {
+    let nextReq = [...requestFlowDraft];
+    let nextRes = [...responseFlowDraft];
+
     if (target === 'request') {
-      setRequestFlowDraft(prev => prev.filter(p => p.id !== policyToRemove.id));
+      nextReq = nextReq.filter(p => p.id !== policyToRemove.id);
+      setRequestFlowDraft(nextReq);
     } else if (target === 'response') {
-      setResponseFlowDraft(prev => prev.filter(p => p.id !== policyToRemove.id));
+      nextRes = nextRes.filter(p => p.id !== policyToRemove.id);
+      setResponseFlowDraft(nextRes);
     }
+
     if (selectedPolicy?.id === policyToRemove.id) {
       setSelectedPolicy(null);
     }
+
+    // Sincronizar al XML inmediatamente
+    syncDraftToXml(nextReq, nextRes);
   };
 
   // Hacer policies draggables
