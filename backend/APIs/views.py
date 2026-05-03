@@ -7,7 +7,7 @@ from rest_framework import status
 from .services import get_latest_revision_path
 from .services import get_proxy_tree
 from .services import get_proxy_file_tree
-from .services import get_proxy_file_content
+from .services import get_proxy_file_content, update_proxy_file_content
 import os
 import socket
 import logging
@@ -23,6 +23,30 @@ class ProxyTreeView(APIView):
         if data:
             return Response(data)
         return Response({"error": "Proxy no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+
+class ProxyFileUpdateView(APIView):
+    """API para actualizar el contenido de un archivo físico del proxy."""
+    
+    def post(self, request, proxy_name):
+        file_path = request.data.get('path')
+        content = request.data.get('content')
+        
+        if not file_path or content is None:
+            return Response({"error": "Se requieren 'path' y 'content'"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        success = update_proxy_file_content(proxy_name, file_path, content)
+        
+        if not success:
+            return Response(
+                {"error": f"No se pudo actualizar el archivo '{file_path}' del proxy '{proxy_name}'"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+            
+        return Response({
+            "message": "Archivo actualizado correctamente",
+            "proxy": proxy_name,
+            "path": file_path
+        })
  
 class ProxyDeployedListView(APIView):
     def get(self, request):

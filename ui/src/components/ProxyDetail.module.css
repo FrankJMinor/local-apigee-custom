@@ -1000,8 +1000,167 @@
   border-radius: 4px;
 }
 
-.collapseToggle:hover {
-  background: rgba(255, 255, 255, 0.1);
+/* ── Monaco Editor Integration Styles ────────────────────────────────────── */
+.editorTopInfo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 15px;
+  background: #111827;
+  border-bottom: 1px solid #374151;
+  font-size: 11px;
+}
+
+.infoLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.infoRight {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.infoLabel {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.infoValue {
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.infoValuePath {
+  color: #64748b;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.usedIn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.badgeJS {
+  background: #f59e0b;
+  color: #000;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 800;
+  font-size: 9px;
+}
+
+.badgePolicy {
+  background: #064e3b;
+  color: #10b981;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.badgeFlow {
+  background: #1e3a8a;
+  color: #60a5fa;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.statusBadges {
+  display: flex;
+  gap: 8px;
+}
+
+.statusModificado {
+  color: #f97316;
+  border: 1px solid #f97316;
+  padding: 1px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.statusError {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  padding: 1px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.unsavedDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: #f97316;
+  border-radius: 50%;
+  margin-left: 8px;
+}
+
+.actionDivider {
+  width: 1px;
+  height: 16px;
+  background: #374151;
+  margin: 0 4px;
+}
+
+.codeHeader {
+  height: 38px;
+  background: #1f2937;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  border-bottom: 1px solid #111827;
+}
+
+.codeTab {
+  padding: 8px 15px;
+  font-size: 12px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid #111827;
+  background: #111827;
+  cursor: pointer;
+}
+
+.activeCodeTab {
+  background: #1f2937;
+  color: #f8fafc;
+  font-weight: 500;
+  border-top: 1px solid #3b82f6;
+}
+
+.codeActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.iconAction {
+  padding: 6px;
+  border-radius: 4px;
+  color: #94a3b8;
+  transition: all 0.2s;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.iconAction:hover {
+  background: #374151;
+  color: #f8fafc;
+}
+
+.iconAction:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Para el Project Explorer (apagado) */

@@ -5,7 +5,8 @@ import {
   IconRocket, IconRefresh, IconTrace, IconActivity, IconEdit, 
   IconChevronRight, IconChevronDown, IconX, IconCheck, 
   IconVerifyAPIKey, IconQuota, IconXMLJSON, IconSpikeArrest,
-  IconKVM, IconDiana, IconSet, IconCloud, IconLaptop
+  IconKVM, IconDiana, IconSet, IconCloud, IconLaptop,
+  IconSave, IconCopy, IconDownload, IconTerminal, IconSettings
 } from './Icons';
 
 // Configuración global de Monaco para Apigee (Rhino/ES5)
@@ -36,18 +37,21 @@ const APIGEE_JS_TYPES = `
 
 loader.init().then(monaco => {
   // Configurar JS para que sea compatible con Rhino (ES5)
-  monaco.languages.javascript.javascriptDefaults.setCompilerOptions({
-    target: monaco.languages.javascript.ScriptTarget.ES5,
-    allowNonTsExtensions: true,
-    noLib: true, // Evitar sugerencias de Browser/Node que no existen en Rhino
-    checkJs: true
-  });
+  // Nota: En Monaco, la configuración de JavaScript se encuentra bajo 'typescript'
+  if (monaco.languages.typescript) {
+    monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
+      target: monaco.languages.typescript.ScriptTarget.ES5,
+      allowNonTsExtensions: true,
+      noLib: true, 
+      checkJs: true
+    });
 
-  // Inyectar tipos de Apigee
-  monaco.languages.javascript.javascriptDefaults.addExtraLib(
-    APIGEE_JS_TYPES,
-    'ts:filename/apigee.d.ts'
-  );
+    // Inyectar tipos de Apigee
+    monaco.languages.typescript.javascriptDefaults.addExtraLib(
+      APIGEE_JS_TYPES,
+      'ts:filename/apigee.d.ts'
+    );
+  }
 });
 import AssignMessageSVG from '../../icons/AssignMessage.svg';
 import KeyValueMapOperationsSVG from '../../icons/KeyValueMapOperations.svg';
@@ -282,8 +286,38 @@ PolicyInspector.propTypes = {
 };
 
 // ── SUB-COMPONENT: CodeEditor (Reemplaza a XmlEditor) ───────────────────────
-const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollapsed, onToggleCollapse, currentFileName }) => {
-  const language = currentFileName?.endsWith('.js') ? 'javascript' : 'xml';
+const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollapsed, onToggleCollapse, selectedFile, onSave, onPlay, isSaving, proxyName }) => {
+  const language = selectedFile?.full_name?.endsWith('.js') ? 'javascript' : 'xml';
+  const editorRef = useRef(null);
+  const monacoRef = useRef(null);
+  const [errorCount, setErrorCount] = useState(0);
+
+  const isModified = selectedFile && code !== selectedFile.content;
+  const bundlePath = selectedFile ? `apiproxy/${selectedFile.path}` : '';
+
+  const handleEditorDidMount = (editor, monaco) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+    
+    // Escuchar cambios en los markers para contar errores
+    monaco.editor.onDidChangeMarkers(([uri]) => {
+      const markers = monaco.editor.getModelMarkers({ resource: uri });
+      setErrorCount(markers.filter(m => m.severity === 8).length);
+    });
+  };
+
+  const handlePlayClick = () => {
+    if (language === 'javascript' && monacoRef.current && editorRef.current) {
+      const markers = monacoRef.current.editor.getModelMarkers({ owner: 'javascript' });
+      const errors = markers.filter(m => m.severity === 8);
+      
+      if (errors.length > 0) {
+        alert(`Error de sintaxis ES5 (Rhino):\n${errors[0].message} en línea ${errors[0].startLineNumber}`);
+        return;
+      }
+    }
+    onPlay();
+  };
 
   return (
     <footer className={`${styles.codeEditor} ${isCollapsed ? styles.editorCollapsed : ''}`} style={{ height: isCollapsed ? '36px' : `${footerHeight}px` }}>
@@ -292,19 +326,48 @@ const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollaps
           <div className={styles.resizerBar} />
         </div>
       )}
+
+      {/* NEW: Top Info Header */}
+      {!isCollapsed && (
+        <div className={styles.editorTopInfo}>
+          <div className={styles.infoLeft}>
+            <span className={styles.infoLabel}>File</span>
+            <span className={styles.infoValue}>{selectedFile?.full_name || '-'}</span>
+            <span className={styles.infoLabel} style={{ marginLeft: '15px' }}>Bundle Path</span>
+            <span className={styles.infoValuePath}>{bundlePath}</span>
+          </div>
+          <div className={styles.infoRight}>
+            <div className={styles.usedIn}>
+              <span className={styles.infoLabel}>Used in</span>
+              <span className={styles.badgeJS}>JS</span>
+              <span className={styles.badgePolicy}>{selectedFile?.name}</span>
+              <span className={styles.badgeFlow}>LoggingPolicy</span>
+            </div>
+            <div className={styles.statusBadges}>
+              {isModified && <span className={styles.statusModificado}>Modificado</span>}
+              {errorCount > 0 && <span className={styles.statusError}>{errorCount} error{errorCount > 1 ? 'es' : ''}</span>}
+            </div>
+          </div>
+        </div>
+      )}
       
       <div className={styles.codeHeader}>
         <div className={styles.codeTabs}>
-          <div className={`${styles.codeTab} ${styles.activeCodeTab}`}>{currentFileName || 'config.xml'}</div>
+          <div className={`${styles.codeTab} ${styles.activeCodeTab}`}>
+            {selectedFile?.full_name?.endsWith('.js') ? <span style={{color: '#f59e0b', marginRight: '6px', fontSize: '10px'}}>JS</span> : <span style={{color: '#3b82f6', marginRight: '6px', fontSize: '10px'}}>XML</span>}
+            {selectedFile?.full_name || 'config.xml'}
+            {isModified && <span className={styles.unsavedDot} />}
+          </div>
         </div>
         <div className={styles.codeActions}>
-          <button className={styles.iconAction} title="Copy"><IconEdit size={14}/></button>
-          <button className={styles.iconAction} title="Format"><IconRefresh size={14}/></button>
-          <button 
-            className={`${styles.iconAction} ${styles.collapseToggle}`} 
-            onClick={onToggleCollapse}
-            title={isCollapsed ? "Expand" : "Collapse"}
-          >
+          <button className={styles.iconAction} onClick={handlePlayClick} title="Validar y Desplegar"><IconRocket size={16} color="#10b981" /></button>
+          <button className={styles.iconAction} onClick={onSave} title="Guardar" disabled={isSaving}><IconSave size={15} /></button>
+          <button className={styles.iconAction} title="Reset"><IconRefresh size={15} /></button>
+          <button className={styles.iconAction} title="Settings"><IconSettings size={15} /></button>
+          <div className={styles.actionDivider} />
+          <button className={styles.iconAction} title="Copy"><IconCopy size={15} /></button>
+          <button className={styles.iconAction} title="Download"><IconDownload size={15} /></button>
+          <button className={styles.iconAction} onClick={onToggleCollapse} title={isCollapsed ? "Expand" : "Collapse"}>
             <IconChevronDown size={16} style={{ transform: isCollapsed ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }}/>
           </button>
         </div>
@@ -318,6 +381,7 @@ const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollaps
             theme="vs-dark"
             value={code}
             onChange={(val) => setCode(val)}
+            onMount={handleEditorDidMount}
             options={{
               minimap: { enabled: false },
               fontSize: 13,
@@ -328,7 +392,9 @@ const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollaps
               wordWrap: 'on',
               lineNumbersMinChars: 3,
               glyphMargin: false,
-              folding: true
+              folding: true,
+              renderValidationDecorations: 'on',
+              lineHeight: 22
             }}
           />
         </div>
@@ -344,7 +410,11 @@ CodeEditor.propTypes = {
   onResizerMouseDown: PropTypes.func.isRequired,
   isCollapsed: PropTypes.bool.isRequired,
   onToggleCollapse: PropTypes.func.isRequired,
-  currentFileName: PropTypes.string
+  selectedFile: PropTypes.object,
+  onSave: PropTypes.func.isRequired,
+  onPlay: PropTypes.func.isRequired,
+  isSaving: PropTypes.bool,
+  proxyName: PropTypes.string
 };
 
 // ── MAIN COMPONENT: ProxyDetail ──────────────────────────────────────────────
@@ -359,6 +429,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   const [isEditorCollapsed, setIsEditorCollapsed] = useState(false);
   const [xmlCode, setXmlCode] = useState('');
   const [fileCache, setFileCache] = useState({}); // Cache para persistir cambios entre archivos
+  const [isSaving, setIsSaving] = useState(false);
 
   // Extraer flujos de un XML de Endpoint
   const getFlowsFromXml = (xml) => {
@@ -760,6 +831,37 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     }
   });
 
+  const handleSave = async () => {
+    if (!selectedFile) return;
+    
+    setIsSaving(true);
+    try {
+      const response = await fetch(`http://localhost:8446/v1/proxies/${proxy.name}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path: selectedFile.path,
+          content: xmlCode
+        })
+      });
+
+      if (!response.ok) throw new Error('Error al guardar archivo');
+      
+      // Actualizar el objeto selectedFile localmente para que content coincida
+      selectedFile.content = xmlCode;
+      alert('Archivo guardado correctamente');
+    } catch (e) {
+      alert(`Error: ${e.message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePlay = async () => {
+    await handleSave();
+    alert('Proxy actualizado en el emulador');
+  };
+
   return (
     <div className={styles.detailWrapper}>
       {/* Top Bar: Actions & Breadcrumbs */}
@@ -980,7 +1082,11 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             }}
             isCollapsed={isEditorCollapsed}
             onToggleCollapse={() => setIsEditorCollapsed(!isEditorCollapsed)}
-            currentFileName={selectedFile?.full_name}
+            selectedFile={selectedFile}
+            onSave={handleSave}
+            onPlay={handlePlay}
+            isSaving={isSaving}
+            proxyName={proxy.name}
           />
         </div>
 

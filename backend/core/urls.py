@@ -21,7 +21,7 @@ from django.urls import path
 
 # IMPORTANTE: Importamos desde 'api.views' (ruta absoluta), no desde '.'
 from APIs.views import ApigeeOrganizationApisView, ProxyTreeView
-from APIs.views import ProxyDeployedListView, ProxyFileListView, ProxyFileContentView
+from APIs.views import ProxyDeployedListView, ProxyFileListView, ProxyFileContentView, ProxyFileUpdateView
 
 
 urlpatterns = [
@@ -31,5 +31,6 @@ urlpatterns = [
     path('v1/proxies/deployed', ProxyDeployedListView.as_view()),
     path('v1/proxies/<str:proxy_name>/files', ProxyFileListView.as_view()),
     path('v1/proxies/<str:proxy_name>/content', ProxyFileContentView.as_view()),
+    path('v1/proxies/<str:proxy_name>/update', ProxyFileUpdateView.as_view()),
     path('v1/organizations/<str:org>/apis', ApigeeOrganizationApisView.as_view()),
 ]

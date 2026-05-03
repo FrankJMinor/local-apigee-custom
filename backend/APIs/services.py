@@ -179,3 +179,23 @@ def get_proxy_file_content(proxy_name: str, file_path: str) -> Optional[str]:
     except Exception as e:
         logger.error(f"Error al leer archivo {full_path}: {e}")
         return None
+
+def update_proxy_file_content(proxy_name: str, file_path: str, content: str) -> bool:
+    """Sobrescribe el contenido de un archivo específico dentro del bundle del proxy."""
+    base_path = get_latest_revision_path()
+    if not base_path:
+        return False
+
+    full_path = os.path.join(base_path, proxy_name, 'apiproxy', file_path)
+
+    if not os.path.exists(full_path):
+        logger.error(f"Archivo no encontrado para actualizar: {full_path}")
+        return False
+
+    try:
+        with open(full_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        return True
+    except Exception as e:
+        logger.error(f"Error al escribir en archivo {full_path}: {e}")
+        return False
