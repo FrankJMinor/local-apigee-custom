@@ -4,6 +4,9 @@
       "name": "HelloWorld"
     },
     {
+      "name": "post-activation-v1"
+    },
+    {
       "name": "REVERSE-proxy"
     }
   ],

@@ -83,7 +83,7 @@ const FlowConnection = ({ reverse = false, track, index, dragOverInfo, setDragOv
 };
 
 // Drag & Drop VisualFlowCanvas con diseño paralelo estilo Apigee
-const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy, requestFlowDraft, responseFlowDraft, onDropPolicy }) => {
+const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy, requestFlowDraft, responseFlowDraft, onDropPolicy, onRemovePolicy }) => {
   const [dragOverInfo, setDragOverInfo] = useState({ track: null, index: null });
 
   const handleDragOver = (e) => e.preventDefault();
@@ -101,29 +101,44 @@ const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy, requestFlowDraft, re
       <div className={styles.flowTrack} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, target)}>
         <div className={styles.trackPill}>{label}</div>
         <div className={styles.trackLine}>
-          {steps.map((step, idx) => (
-            <React.Fragment key={step.id || step.name + idx}>
-              <div 
-                className={`${styles.flowStep} ${selectedPolicy?.name === step.name ? styles.activeStep : ''}`}
-                onClick={() => onSelectPolicy(step)}
-              >
-                <div className={styles.iconContainer}>
-                  {getPolicyIcon(step.type, styles.trackIcon, 24)}
+          {steps.map((step, idx) => {
+            const isEndpoint = step.name === 'App' || step.name === 'Target';
+            return (
+              <React.Fragment key={step.id || step.name + idx}>
+                <div 
+                  className={`${styles.flowStep} ${selectedPolicy?.name === step.name ? styles.activeStep : ''}`}
+                  onClick={() => onSelectPolicy(step)}
+                >
+                  <div className={styles.iconContainer}>
+                    {getPolicyIcon(step.type, styles.trackIcon, 24)}
+                    {!isEndpoint && (
+                      <button 
+                        className={styles.removeStepBtn} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemovePolicy(step, target);
+                        }}
+                        title="Remove Policy"
+                      >
+                        <IconX size={10} />
+                      </button>
+                    )}
+                  </div>
+                  <span className={styles.stepLabel}>{step.name}</span>
                 </div>
-                <span className={styles.stepLabel}>{step.name}</span>
-              </div>
-              {idx < steps.length - 1 && (
-                <FlowConnection 
-                  reverse={isReverse} 
-                  track={target}
-                  index={idx}
-                  dragOverInfo={dragOverInfo}
-                  setDragOverInfo={setDragOverInfo}
-                  onDropPolicy={onDropPolicy}
-                />
-              )}
-            </React.Fragment>
-          ))}
+                {idx < steps.length - 1 && (
+                  <FlowConnection 
+                    reverse={isReverse} 
+                    track={target}
+                    index={idx}
+                    dragOverInfo={dragOverInfo}
+                    setDragOverInfo={setDragOverInfo}
+                    onDropPolicy={onDropPolicy}
+                  />
+                )}
+              </React.Fragment>
+            );
+          })}
         </div>
       </div>
     );
@@ -164,7 +179,8 @@ VisualFlowCanvas.propTypes = {
   onSelectPolicy: PropTypes.func.isRequired,
   requestFlowDraft: PropTypes.array.isRequired,
   responseFlowDraft: PropTypes.array.isRequired,
-  onDropPolicy: PropTypes.func.isRequired
+  onDropPolicy: PropTypes.func.isRequired,
+  onRemovePolicy: PropTypes.func.isRequired
 };
 
 // ── SUB-COMPONENT: PolicyInspector ───────────────────────────────────────────
@@ -293,6 +309,7 @@ XmlEditor.propTypes = {
 function ProxyDetail({ proxy, fileTree, onClose }) {
   const [activeTab, setActiveTab] = useState('Develop');
   const [footerHeight, setFooterHeight] = useState(280);
+  const [navigatorWidth, setNavigatorWidth] = useState(260);
   const [selectedPolicy, setSelectedPolicy] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
@@ -312,6 +329,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   // Arrastre de la pestaña de Properties
   const [inspectorTop, setInspectorTop] = useState(null);
   const [isDraggingInspector, setIsDraggingInspector] = useState(false);
+  const [isResizingNav, setIsResizingNav] = useState(false);
   const dragStartY = useRef(0);
   const dragStartTop = useRef(0);
   const hasMovedInspector = useRef(false);
@@ -327,8 +345,23 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     e.stopPropagation();
   };
 
+  const handleNavResizeMouseDown = (e) => {
+    setIsResizingNav(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
   useEffect(() => {
     const handleMouseMove = (e) => {
+      // Manejo de redimensión del Navigator (Left Sidebar)
+      if (isResizingNav) {
+        const newWidth = e.clientX - workspaceRef.current.getBoundingClientRect().left;
+        if (newWidth > 150 && newWidth < 500) {
+          setNavigatorWidth(newWidth);
+        }
+        return;
+      }
+
       if (!isDraggingInspector) return;
       const deltaY = e.clientY - dragStartY.current;
       if (Math.abs(deltaY) > 5) {
@@ -345,9 +378,12 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
 
     const handleMouseUp = () => {
       setIsDraggingInspector(false);
+      setIsResizingNav(false);
+      document.body.style.cursor = 'default';
+      document.body.style.userSelect = '';
     };
 
-    if (isDraggingInspector) {
+    if (isDraggingInspector || isResizingNav) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     }
@@ -355,7 +391,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDraggingInspector]);
+  }, [isDraggingInspector, isResizingNav]);
 
   // Efecto inicial para cargar el root_config (HelloWorld.xml)
   useEffect(() => {
@@ -508,6 +544,17 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     }
   };
 
+  const handleRemovePolicy = (policyToRemove, target) => {
+    if (target === 'request') {
+      setRequestFlowDraft(prev => prev.filter(p => p.id !== policyToRemove.id));
+    } else if (target === 'response') {
+      setResponseFlowDraft(prev => prev.filter(p => p.id !== policyToRemove.id));
+    }
+    if (selectedPolicy?.id === policyToRemove.id) {
+      setSelectedPolicy(null);
+    }
+  };
+
   // Hacer policies draggables
   const makePolicyDraggable = (policy) => ({
     draggable: true,
@@ -561,8 +608,12 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
 
       {/* Main Workspace */}
       <div className={styles.workspace} ref={workspaceRef}>
-        <aside className={styles.navigator}>
+        <aside className={styles.navigator} style={{ width: navigatorWidth }}>
           <div className={styles.navHeader}>Project Explorer</div>
+          <div 
+            className={`${styles.navResizer} ${isResizingNav ? styles.navResizing : ''}`} 
+            onMouseDown={handleNavResizeMouseDown} 
+          />
           <div className={styles.navTree}>
             {/* Root Config File */}
             {fileTree?.root_config && (
@@ -679,6 +730,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             requestFlowDraft={requestFlowDraft}
             responseFlowDraft={responseFlowDraft}
             onDropPolicy={handleDropPolicy}
+            onRemovePolicy={handleRemovePolicy}
           />
 
           <XmlEditor 

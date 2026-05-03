@@ -192,6 +192,7 @@
   display: flex;
   flex-direction: column;
   z-index: 5;
+  position: relative; /* Añadido para contener el resizer absoluto */
 }
 
 .navHeader {
@@ -205,6 +206,46 @@
 
 .navTree {
   padding: 0.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Resizer vertical para el Navigator */
+.navResizer {
+  width: 10px;
+  cursor: col-resize;
+  background: transparent;
+  transition: all 0.2s;
+  position: absolute;
+  right: -5px; /* Centrado sobre el borde derecho */
+  top: 0;
+  bottom: 0;
+  z-index: 100; /* Asegurar que esté por encima de todo */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.navResizer::after {
+  content: "";
+  width: 4px; /* Un poco más grueso */
+  height: 30px;
+  background: var(--text-muted); /* Color más visible */
+  border-radius: 4px;
+  transition: all 0.2s;
+  box-shadow: 0 -8px 0 var(--text-muted), 0 8px 0 var(--text-muted);
+  opacity: 0.8; /* Más opaco por defecto */
+}
+
+.navResizer:hover::after, .navResizing::after {
+  background: var(--accent);
+  box-shadow: 0 -6px 0 var(--accent), 0 6px 0 var(--accent);
+  opacity: 1;
+  height: 32px;
+}
+
+.navResizer:hover {
+  background: rgba(var(--accent-rgb, 59, 130, 246), 0.05);
 }
 
 .treeFolder {
@@ -424,6 +465,37 @@
   transform: translateY(-2px);
 }
 
+.removeStepBtn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ef4444;
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 20;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  padding: 0;
+}
+
+.iconContainer:hover .removeStepBtn {
+  opacity: 1;
+}
+
+.removeStepBtn:hover {
+  background: #dc2626;
+  transform: scale(1.2);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
 .flowTrack:last-child .iconContainer:hover {
   transform: translateY(2px);
 }
@@ -495,6 +567,10 @@
   background-repeat: repeat-x;
   animation: arrowFlow 2s infinite linear;
   opacity: 0.6;
+}
+
+.reverseFlow .flowArrows {
+  transform: scaleX(-1);
 }
 
 .flowTrack:last-child .flowArrows {
