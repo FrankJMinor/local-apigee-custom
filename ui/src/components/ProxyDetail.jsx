@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { PolicyDetailView } from './PolicyDetailView';
 import PropTypes from 'prop-types';
 import Editor, { loader } from '@monaco-editor/react';
-import { 
-  IconRocket, IconRefresh, IconTrace, IconActivity, IconEdit, 
-  IconChevronRight, IconChevronDown, IconX, IconCheck, 
+import {
+  IconRocket, IconRefresh, IconTrace, IconActivity, IconEdit,
+  IconChevronRight, IconChevronDown, IconX, IconCheck,
   IconVerifyAPIKey, IconQuota, IconXMLJSON, IconSpikeArrest,
   IconKVM, IconDiana, IconSet, IconCloud, IconLaptop,
   IconSave, IconCopy, IconDownload, IconTerminal, IconSettings
@@ -42,7 +43,7 @@ loader.init().then(monaco => {
     monaco.languages.typescript.javascriptDefaults.setCompilerOptions({
       target: monaco.languages.typescript.ScriptTarget.ES5,
       allowNonTsExtensions: true,
-      noLib: true, 
+      noLib: true,
       checkJs: true
     });
 
@@ -64,6 +65,7 @@ import JSONToXMLSVG from '../../icons/JSONToXML.svg';
 import KeyValueMapOperationsSVG from '../../icons/KeyValueMapOperations.svg';
 import RaiseFaultSVG from '../../icons/RaiseFault.svg';
 import styles from './ProxyDetail.module.css';
+import CacheSVG from '../../icons/Cache.svg';
 
 // ── SUB-COMPONENT: NeonFilter ──────────────────────────────────────────────
 const NeonFilter = () => (
@@ -88,62 +90,67 @@ const getPolicyTypeClass = (name) => {
   return styles.policyTraffic;
 };
 
-
+const getFileIcon = (fileName, size = 14) => {
+  if (fileName.endsWith('.js')) {
+    return (
+      <span style={{ 
+        backgroundColor: '#f59e0b', color: '#000', padding: '1px 3px', 
+        borderRadius: '2px', fontSize: '9px', fontWeight: 'bold',
+        marginRight: '6px', display: 'inline-flex', alignItems: 'center',
+        justifyContent: 'center', width: '14px', height: '14px', lineHeight: '1'
+      }}>JS</span>
+    );
+  }
+  return <span style={{ marginRight: '6px' }}>📄</span>;
+};
 
 const getPolicyIcon = (type, className, size = 24) => {
   const t = type || "";
-  
-  // Estilo base para aplicar el efecto neón de tu componente NeonFilter
-  const iconStyle = { 
-    width: size, 
-    height: size, 
-    filter: 'url(#neonGlowIcon)' 
-  };
+  const iconStyle = { width: size, height: size, filter: 'url(#neonGlowIcon)' };
 
-  // REGLA DE LA NUBE: Múltiples políticas usan el mismo icono
+  // REGLA DE LA NUBE
   const cloudPolicies = [
-    'MonetizationLimitsCheck',
-    'XSLTransform',
-    'OpenAPISpecValidation',
-    'SOAPMessageValidation',
-    'AccessEntity'
+    'MonetizationLimitsCheck', 'XSLTransform', 'OpenAPISpecValidation', 
+    'SOAPMessageValidation', 'AccessEntity'
+  ];
+
+  // NUEVA REGLA DE CACHE (Cache.svg)
+  const cachePolicies = [
+    'ResponseCache', 
+    'LookupCache', 
+    'PopulateCache', 
+    'InvalidateCache'
   ];
 
   if (cloudPolicies.includes(t) || t === 'Cloud') {
-    return <img src={CloudSVG} className={className} style={iconStyle} alt="Cloud Policy" />;
+    return <img src={CloudSVG} className={className} style={iconStyle} alt="Cloud" />;
   }
 
-  // Mapeo de iconos específicos
+  if (cachePolicies.includes(t)) {
+    return <img src={CacheSVG} className={className} style={iconStyle} alt="Cache" />;
+  }
+
   switch (t) {
-    case 'AssignMessage':
-      return <img src={AssignMessageSVG} className={className} style={iconStyle} alt={t} />;
-    case 'ExtractVariables':
-      return <img src={ExtractVariablesSVG} className={className} style={iconStyle} alt={t} />;
-    case 'FlowCallout':
-      return <img src={FlowCalloutSVG} className={className} style={iconStyle} alt={t} />;
-    case 'Script':
-    case 'Javascript':
-      return <img src={JavascriptSVG} className={className} style={iconStyle} alt={t} />;
-    case 'JSONToXML':
-    case 'XMLToJSON':
-      return <img src={JSONToXMLSVG} className={className} style={iconStyle} alt={t} />;
-    case 'KeyValueMapOperations':
-    case 'KVM':
-      return <img src={KeyValueMapOperationsSVG} className={className} style={iconStyle} alt={t} />;
-    case 'RaiseFault':
-      return <img src={RaiseFaultSVG} className={className} style={iconStyle} alt={t} />;
-    default:
-      // Fallback por si la política no está mapeada aún
-      return <span className={className} style={{ fontSize: size === 14 ? '12px' : '18px' }}>⚙️</span>;
+    case 'AssignMessage': return <img src={AssignMessageSVG} className={className} style={iconStyle} />;
+    case 'ExtractVariables': return <img src={ExtractVariablesSVG} className={className} style={iconStyle} />;
+    case 'FlowCallout': return <img src={FlowCalloutSVG} className={className} style={iconStyle} />;
+    case 'Javascript': case 'Script': return <img src={JavascriptSVG} className={className} style={iconStyle} />;
+    case 'JSONToXML': case 'XMLToJSON': return <img src={JSONToXMLSVG} className={className} style={iconStyle} />;
+    case 'KeyValueMapOperations': case 'KVM': return <img src={KeyValueMapOperationsSVG} className={className} style={iconStyle} />;
+    case 'RaiseFault': return <img src={RaiseFaultSVG} className={className} style={iconStyle} />;
+    case 'SpikeArrest': return <img src={SpikeArrestSVG} className={className} style={iconStyle} />;
+    case 'Laptop': return <IconLaptop size={size} className={className} />;
+    case 'Set': return <IconSet size={size} className={className} />;
+    default: return <span style={{ fontSize: size === 14 ? '12px' : '18px', marginRight: '6px' }}>⚙️</span>;
   }
 };
 
 // ── SUB-COMPONENT: VisualFlowCanvas ──────────────────────────────────────────
 const FlowConnection = ({ reverse = false, track, index, dragOverInfo, setDragOverInfo, onDropPolicy }) => {
   const isDragOver = dragOverInfo?.track === track && dragOverInfo?.index === index;
-  
+
   return (
-    <div 
+    <div
       className={`${styles.flowLink} ${reverse ? styles.reverseFlow : ''} ${isDragOver ? styles.dragOverActive : ''}`}
       onDragOver={(e) => {
         e.preventDefault();
@@ -193,15 +200,15 @@ const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy, requestFlowDraft, re
             const isEndpoint = step.name === 'App' || step.name === 'Target' || step.name === 'Backend';
             return (
               <React.Fragment key={step.id || step.name + idx}>
-                <div 
+                <div
                   className={`${styles.flowStep} ${selectedPolicy?.name === step.name ? styles.activeStep : ''}`}
                   onClick={() => onSelectPolicy(step)}
                 >
                   <div className={styles.iconContainer}>
                     {getPolicyIcon(step.type, styles.trackIcon, 24)}
                     {!isEndpoint && (
-                      <button 
-                        className={styles.removeStepBtn} 
+                      <button
+                        className={styles.removeStepBtn}
                         onClick={(e) => {
                           e.stopPropagation();
                           onRemovePolicy(step, target);
@@ -215,8 +222,8 @@ const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy, requestFlowDraft, re
                   <span className={styles.stepLabel}>{step.name}</span>
                 </div>
                 {idx < steps.length - 1 && (
-                  <FlowConnection 
-                    reverse={isReverse} 
+                  <FlowConnection
+                    reverse={isReverse}
                     track={target}
                     index={idx}
                     dragOverInfo={dragOverInfo}
@@ -232,7 +239,7 @@ const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy, requestFlowDraft, re
     );
   };
 
-  const requestSteps = isTarget 
+  const requestSteps = isTarget
     ? [{ name: 'Proxy', type: 'Set' }, ...requestFlowDraft, { name: 'Backend', type: 'Cloud' }]
     : [{ name: 'App', type: 'Laptop' }, ...requestFlowDraft, { name: 'Target', type: 'Cloud' }];
 
@@ -278,14 +285,14 @@ const PolicyInspector = ({ policy, isOpen, onClose }) => {
         </div>
         <button className={styles.closeBtn} onClick={onClose}><IconX size={18} /></button>
       </div>
-      
+
       {policy ? (
         <div className={styles.drawerContent}>
           <div className={styles.fieldGroup}>
             <label className={styles.fieldLabel}>Policy Name</label>
             <div className={styles.fieldValue}>{policy.name}</div>
           </div>
-          
+
           <div className={styles.fieldGroup}>
             <label className={styles.fieldLabel}>Type</label>
             <div className={`${styles.typeBadge} ${styles['type' + policy.type]}`}>
@@ -295,10 +302,10 @@ const PolicyInspector = ({ policy, isOpen, onClose }) => {
 
           <div className={styles.fieldGroup}>
             <label className={styles.fieldLabel}>Display Name</label>
-            <input 
-              type="text" 
-              className={styles.drawerInput} 
-              defaultValue={policy.name.replaceAll('-', ' ')} 
+            <input
+              type="text"
+              className={styles.drawerInput}
+              defaultValue={policy.name.replaceAll('-', ' ')}
             />
           </div>
 
@@ -339,7 +346,7 @@ const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollaps
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
-    
+
     // Escuchar cambios en los markers para contar errores
     monaco.editor.onDidChangeMarkers(([uri]) => {
       const markers = monaco.editor.getModelMarkers({ resource: uri });
@@ -351,7 +358,7 @@ const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollaps
     if (language === 'javascript' && monacoRef.current && editorRef.current) {
       const markers = monacoRef.current.editor.getModelMarkers({ owner: 'javascript' });
       const errors = markers.filter(m => m.severity === 8);
-      
+
       if (errors.length > 0) {
         alert(`Error de sintaxis ES5 (Rhino):\n${errors[0].message} en línea ${errors[0].startLineNumber}`);
         return;
@@ -391,25 +398,45 @@ const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollaps
           </div>
         </div>
       )}
-      
+
       <div className={styles.codeHeader}>
         <div className={styles.codeTabs}>
           <div className={`${styles.codeTab} ${styles.activeCodeTab}`}>
-            {selectedFile?.full_name?.endsWith('.js') ? <span style={{color: '#f59e0b', marginRight: '6px', fontSize: '10px'}}>JS</span> : <span style={{color: '#3b82f6', marginRight: '6px', fontSize: '10px'}}>XML</span>}
+            {selectedFile?.full_name?.endsWith('.js') ? <span style={{ color: '#f59e0b', marginRight: '6px', fontSize: '10px' }}>JS</span> : <span style={{ color: '#3b82f6', marginRight: '6px', fontSize: '10px' }}>XML</span>}
             {selectedFile?.full_name || 'config.xml'}
             {isModified && <span className={styles.unsavedDot} />}
           </div>
         </div>
         <div className={styles.codeActions}>
-          <button className={styles.iconAction} onClick={handlePlayClick} title="Validar y Desplegar"><IconRocket size={16} color="#10b981" /></button>
-          <button className={styles.iconAction} onClick={onSave} title="Guardar" disabled={isSaving}><IconSave size={15} /></button>
-          <button className={styles.iconAction} title="Reset"><IconRefresh size={15} /></button>
-          <button className={styles.iconAction} title="Settings"><IconSettings size={15} /></button>
+          <button
+            className={styles.iconAction}
+            onClick={handlePlayClick}
+            data-tooltip="Validar y Desplegar Flujo"
+          >
+            <IconRocket size={16} color="#10b981" />
+          </button>
+
+          <button
+            className={styles.iconAction}
+            onClick={onSave}
+            disabled={isSaving}
+            data-tooltip="Guardar Cambios (Ctrl+S)"
+          >
+            <IconSave size={15} />
+          </button>
+
+          <button className={styles.iconAction} data-tooltip="Reiniciar Editor">
+            <IconRefresh size={15} />
+          </button>
+
           <div className={styles.actionDivider} />
-          <button className={styles.iconAction} title="Copy"><IconCopy size={15} /></button>
-          <button className={styles.iconAction} title="Download"><IconDownload size={15} /></button>
-          <button className={styles.iconAction} onClick={onToggleCollapse} title={isCollapsed ? "Expand" : "Collapse"}>
-            <IconChevronDown size={16} style={{ transform: isCollapsed ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }}/>
+
+          <button className={styles.iconAction} data-tooltip="Copiar al Portapapeles">
+            <IconCopy size={15} />
+          </button>
+
+          <button className={styles.iconAction} data-tooltip="Descargar Bundle">
+            <IconDownload size={15} />
           </button>
         </div>
       </div>
@@ -476,10 +503,10 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   const getFlowsFromXml = (xml) => {
     if (!xml) return [];
     const flows = [];
-    
+
     // 1. PreFlow
     if (xml.includes('<PreFlow')) flows.push({ name: 'PreFlow', method: 'ALL' });
-    
+
     // 2. Flows condicionales - Extraer nombre y método (si existe en Condition)
     const flowRegex = /<Flow name="(.*?)">/gi;
     let match;
@@ -489,7 +516,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
       const blockRegex = new RegExp(`<Flow name="${flowName}">([\\s\\S]*?)<\\/Flow>`, 'i');
       const blockMatch = xml.match(blockRegex);
       let method = 'ALL';
-      
+
       if (blockMatch) {
         const condition = blockMatch[1].match(/<Condition>[\s\S]*?request\.verb\s*=\s*"(.*?)"[\s\S]*?<\/Condition>/i);
         if (condition) method = condition[1].toUpperCase();
@@ -500,10 +527,10 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
 
     // 3. PostFlow
     if (xml.includes('<PostFlow')) flows.push({ name: 'PostFlow', method: 'ALL' });
-    
+
     // 4. PostClientFlow (solo en ProxyEndpoints)
     if (xml.includes('<PostClientFlow')) flows.push({ name: 'PostClientFlow', method: 'ALL' });
-    
+
     return flows;
   };
 
@@ -517,16 +544,16 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
           if (f.path) newCache[f.path] = f.content || "";
         });
       };
-      
+
       // El root config
       if (fileTree.root_config) newCache[fileTree.root_config.path] = fileTree.root_config.content || "";
-      
+
       // Las carpetas
       traverse(fileTree.policies);
       traverse(fileTree.proxy_endpoints);
       traverse(fileTree.target_endpoints);
       traverse(fileTree.scripts);
-      
+
       setFileCache(newCache);
     }
   }, [fileTree]);
@@ -581,10 +608,10 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
       if (Math.abs(deltaY) > 5) {
         hasMovedInspector.current = true;
       }
-      
+
       const workspaceHeight = workspaceRef.current.offsetHeight;
       const nextTop = dragStartTop.current + deltaY;
-      
+
       // Limitar el movimiento dentro del workspace
       const boundedTop = Math.max(10, Math.min(nextTop, workspaceHeight - 120));
       setInspectorTop(boundedTop);
@@ -607,10 +634,17 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     };
   }, [isDraggingInspector, isResizingNav]);
 
-  // Efecto inicial para cargar el root_config (HelloWorld.xml)
+  // Efecto inicial para cargar el archivo por defecto (priorizando default.xml)
   useEffect(() => {
-    if (fileTree?.root_config) {
-      handleSelectFile(fileTree.root_config);
+    if (fileTree) {
+      // Prioridad 1: default.xml en proxy_endpoints
+      const proxyDefault = fileTree.proxy_endpoints?.find(f => f.full_name === 'default.xml');
+      // Prioridad 2: root_config
+      const initial = proxyDefault || fileTree.root_config;
+      
+      if (initial) {
+        handleSelectFile(initial);
+      }
     }
   }, [fileTree]);
 
@@ -623,9 +657,9 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   // Optimización de Resize con requestAnimationFrame
   const handleMouseMove = useCallback((e) => {
     if (!isResizing.current) return;
-    
+
     if (requestRef.current) cancelAnimationFrame(requestRef.current);
-    
+
     requestRef.current = requestAnimationFrame(() => {
       const newHeight = window.innerHeight - e.clientY;
       if (newHeight > 120 && newHeight < 600) {
@@ -652,34 +686,42 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   }, [handleMouseMove, handleMouseUp]);
 
   const handleSelectFile = async (file) => {
+    // 1. Seteamos el archivo actual
     setSelectedFile(file);
-    
-    // Si seleccionamos un endpoint, por defecto seleccionamos PreFlow
+
+    // 2. LOGICA DE NAVEGACIÓN (Detalle vs Flujo)
+    // Si el path contiene 'policies', abrimos el detalle; si no, volvemos al flujo.
+    if (file.path.includes('policies/')) {
+      setSelectedPolicy({ 
+        name: file.name, 
+        type: file.type || 'Mediation' 
+      });
+    } else {
+      setSelectedPolicy(null);
+    }
+
+    // 3. LOGICA DE FLUJOS (Endpoints)
+    // Si es un Endpoint, seleccionamos PreFlow por defecto.
     if (file.type === 'ProxyEndpoint' || file.type === 'TargetEndpoint') {
       setSelectedFlow({ name: 'PreFlow', method: 'ALL' });
     } else {
       setSelectedFlow(null);
     }
-    
-    // 1. Prioridad: Usar el contenido que ya viene en el objeto (del backend)
+
+    // 4. CARGA DE CONTENIDO (Cache -> API)
     const initialContent = file.content !== undefined ? file.content : fileCache[file.path];
-    
+
     if (initialContent !== undefined) {
       setXmlCode(initialContent);
       
-      // Asegurar que esté en cache para persistencia de ediciones
+      // Asegurar persistencia en cache si es la primera vez que se lee del tree
       if (fileCache[file.path] === undefined) {
         setFileCache(prev => ({ ...prev, [file.path]: initialContent }));
       }
-
-      // Si es una política, actualizamos la selección
-      if (file.path.includes('policies')) {
-        setSelectedPolicy({ name: file.name, type: file.type || 'Mediation' });
-      }
-      return;
+      return; // Salimos temprano si ya tenemos el contenido
     }
 
-    // 2. Fallback: Carga manual (si por alguna razón no venía en el tree)
+    // Fallback: Carga manual desde el backend si no hay contenido en memoria
     try {
       const response = await fetch(`http://localhost:8446/v1/proxies/${proxy.name}/content?path=${encodeURIComponent(file.path)}`);
       const data = await response.json();
@@ -699,9 +741,9 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     if (policyFile) {
       handleSelectFile(policyFile);
     }
-    
+
     setSelectedPolicy(policy);
-    
+
     // Sincronización Inteligente: Scroll al tag <Name> (si ya está cargado el XML)
     if (editorRef.current) {
       const searchStr = `<Name>${policy.name}</Name>`;
@@ -709,7 +751,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
       if (index !== -1) {
         editorRef.current.focus();
         editorRef.current.setSelectionRange(index, index + searchStr.length);
-        
+
         // Scroll aproximado
         const linesBefore = xmlCode.substring(0, index).split('\n').length;
         const lineHeight = 20; // Estimado
@@ -727,12 +769,12 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     if (selectedFile && (selectedFile.type === 'ProxyEndpoint' || selectedFile.type === 'TargetEndpoint')) {
       // Prioridad: Usar primero lo que está en caché (cambios locales), luego el contenido original
       const content = fileCache[selectedFile.path] || selectedFile.content || "";
-      
+
       if (content && selectedFlow) {
         // Parser para obtener steps de UN flujo específico
         const getStepsFromFlow = (xml, flowName) => {
           let flowContent = "";
-          
+
           if (flowName === 'PreFlow') {
             const match = xml.match(/<PreFlow[\s\S]*?>([\s\S]*?)<\/PreFlow>/i);
             if (match) flowContent = match[1];
@@ -753,15 +795,15 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             const sectionRegex = new RegExp(`<${sectionTag}>([\\s\\S]*?)<\\/${sectionTag}>`, 'i');
             const sectionMatch = xmlStr.match(sectionRegex);
             if (!sectionMatch) return [];
-            
+
             const stepRegex = /<Step>\s*<Name>(.*?)<\/Name>\s*<\/Step>/g;
             const sectionContent = sectionMatch[1];
             let sMatch;
             while ((sMatch = stepRegex.exec(sectionContent)) !== null) {
               const policyName = sMatch[1];
               const policyInfo = fileTree?.policies?.find(p => p.name === policyName);
-              steps.push({ 
-                name: policyName, 
+              steps.push({
+                name: policyName,
                 type: policyInfo?.type || 'Mediation',
                 id: `${policyName}-${Math.random().toString(36).substr(2, 9)}`
               });
@@ -788,10 +830,10 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   // Función para actualizar SOLO la sección del flujo seleccionado en el XML
   const syncDraftToXml = (requestSteps, responseSteps) => {
     if (!selectedFile || !selectedFlow) return;
-    
+
     // Usar el XML actual de la caché si existe, si no el original
     const currentXml = fileCache[selectedFile.path] || selectedFile.content || "";
-    
+
     // Generar el nuevo bloque de Request/Response
     let newReq = "        <Request>";
     requestSteps.forEach(p => { newReq += `\n            <Step>\n                <Name>${p.name}</Name>\n            </Step>`; });
@@ -821,11 +863,13 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     setFileCache(prev => ({ ...prev, [selectedFile.path]: updatedXml }));
   };
 
+
+
   // Handler para drop de política
   const handleDropPolicy = (policy, target, index) => {
     // Crear un nuevo step con ID único
     const newStep = { ...policy, id: `${policy.name}-${Date.now()}` };
-    
+
     let nextReq = [...requestFlowDraft];
     let nextRes = [...responseFlowDraft];
 
@@ -874,7 +918,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
 
   const handleSave = async () => {
     if (!selectedFile) return;
-    
+
     setIsSaving(true);
     try {
       const response = await fetch(`http://localhost:8446/v1/proxies/${proxy.name}/update`, {
@@ -887,7 +931,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
       });
 
       if (!response.ok) throw new Error('Error al guardar archivo');
-      
+
       // Actualizar el objeto selectedFile localmente para que content coincida
       selectedFile.content = xmlCode;
       alert('Archivo guardado correctamente');
@@ -923,8 +967,8 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
           </div>
           <div className={styles.statusChip}>● Active</div>
           <div className={styles.actionGroup}>
-            <button className={styles.btnSave}><IconEdit size={14}/> Save</button>
-            <button className={styles.btnDeploy}><IconRocket size={14}/> Deploy</button>
+            <button className={styles.btnSave}><IconEdit size={14} /> Save</button>
+            <button className={styles.btnDeploy}><IconRocket size={14} /> Deploy</button>
           </div>
         </div>
       </header>
@@ -937,26 +981,30 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             className={`${styles.navTab} ${activeTab === tab ? styles.activeTab : ''}`}
             onClick={() => setActiveTab(tab)}
           >
-            {tab === 'Develop' && <IconEdit size={14}/>}
-            {tab === 'Trace' && <IconTrace size={14}/>}
-            {tab === 'Performance' && <IconActivity size={14}/>}
+            {tab === 'Develop' && <IconEdit size={14} />}
+            {tab === 'Trace' && <IconTrace size={14} />}
+            {tab === 'Performance' && <IconActivity size={14} />}
             <span>{tab}</span>
           </button>
         ))}
       </nav>
+      
+
 
       {/* Main Workspace */}
       <div className={styles.workspace} ref={workspaceRef}>
+
+        
         <aside className={styles.navigator} style={{ width: navigatorWidth }}>
           <div className={styles.navHeader}>Project Explorer</div>
-          <div 
-            className={`${styles.navResizer} ${isResizingNav ? styles.navResizing : ''}`} 
-            onMouseDown={handleNavResizeMouseDown} 
+          <div
+            className={`${styles.navResizer} ${isResizingNav ? styles.navResizing : ''}`}
+            onMouseDown={handleNavResizeMouseDown}
           />
           <div className={styles.navTree}>
             {/* Root Config File */}
             {fileTree?.root_config && (
-              <div 
+              <div
                 className={`${styles.treeItem} ${selectedFile?.path === fileTree.root_config.path ? styles.activeTreeItem : ''}`}
                 onClick={() => handleSelectFile(fileTree.root_config)}
                 style={{ fontWeight: 'bold', marginBottom: '8px' }}
@@ -967,7 +1015,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
 
             {/* Policies Section */}
             <div className={styles.treeFolder} onClick={() => toggle('policies')}>
-              {expanded.policies ? <IconChevronDown size={14}/> : <IconChevronRight size={14}/>}
+              {expanded.policies ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
               <span className={styles.folderIcon}>📁</span> Policies
             </div>
             {expanded.policies && (
@@ -993,7 +1041,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
 
             {/* Proxy Endpoints Section */}
             <div className={styles.treeFolder} onClick={() => toggle('proxyEndpoints')}>
-              {expanded.proxyEndpoints ? <IconChevronDown size={14}/> : <IconChevronRight size={14}/>}
+              {expanded.proxyEndpoints ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
               <span className={styles.folderIcon}>📁</span> Proxy Endpoints
             </div>
             {expanded.proxyEndpoints && (
@@ -1001,7 +1049,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
                 {Array.isArray(fileTree?.proxy_endpoints) && fileTree.proxy_endpoints.length > 0 ? (
                   fileTree.proxy_endpoints.map(endpoint => (
                     <React.Fragment key={endpoint.path}>
-                      <div 
+                      <div
                         className={`${styles.treeItem} ${selectedFile?.path === endpoint.path && !selectedFlow ? styles.activeTreeItem : ''}`}
                         onClick={() => handleSelectFile(endpoint)}
                       >
@@ -1010,7 +1058,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
                       {selectedFile?.path === endpoint.path && (
                         <div className={styles.treeSub}>
                           {getFlowsFromXml(selectedFile.content || fileCache[selectedFile.path] || "").map(flow => (
-                            <div 
+                            <div
                               key={flow.name}
                               className={`${styles.flowItem} ${selectedFlow?.name === flow.name ? styles.activeFlowItem : ''}`}
                               onClick={() => setSelectedFlow(flow)}
@@ -1033,7 +1081,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
 
             {/* Target Endpoints Section */}
             <div className={styles.treeFolder} onClick={() => toggle('targetEndpoints')}>
-              {expanded.targetEndpoints ? <IconChevronDown size={14}/> : <IconChevronRight size={14}/>}
+              {expanded.targetEndpoints ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
               <span className={styles.folderIcon}>📁</span> Target Endpoints
             </div>
             {expanded.targetEndpoints && (
@@ -1041,7 +1089,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
                 {Array.isArray(fileTree?.target_endpoints) && fileTree.target_endpoints.length > 0 ? (
                   fileTree.target_endpoints.map(target => (
                     <React.Fragment key={target.path}>
-                      <div 
+                      <div
                         className={`${styles.treeItem} ${selectedFile?.path === target.path && !selectedFlow ? styles.activeTreeItem : ''}`}
                         onClick={() => handleSelectFile(target)}
                       >
@@ -1050,7 +1098,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
                       {selectedFile?.path === target.path && (
                         <div className={styles.treeSub}>
                           {getFlowsFromXml(selectedFile.content || fileCache[selectedFile.path] || "").map(flow => (
-                            <div 
+                            <div
                               key={flow.name}
                               className={`${styles.flowItem} ${selectedFlow?.name === flow.name ? styles.activeFlowItem : ''}`}
                               onClick={() => setSelectedFlow(flow)}
@@ -1073,40 +1121,53 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
 
             {/* Scripts Section */}
             <div className={styles.treeFolder} onClick={() => toggle('scripts')}>
-              {expanded.scripts ? <IconChevronDown size={14}/> : <IconChevronRight size={14}/>}
+              {expanded.scripts ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
               <span className={styles.folderIcon}>📁</span> Scripts
             </div>
+
             {expanded.scripts && (
               <div className={styles.treeSub}>
-                {Array.isArray(fileTree?.scripts) && fileTree.scripts.length > 0 ? (
-                  fileTree.scripts.map(script => (
-                    <div 
-                      key={script.path}
-                      className={`${styles.treeItem} ${selectedFile?.path === script.path ? styles.activeTreeItem : ''}`}
-                      onClick={() => handleSelectFile(script)}
-                    >
-                      <span className={styles.itemIcon}>📄</span> {script.name}
-                    </div>
-                  ))
-                ) : (
-                  <div className={styles.emptyTreeItem}>No scripts</div>
-                )}
+                {fileTree?.scripts?.map(script => (
+                  <div 
+                    key={script.path}
+                    className={`${styles.treeItem} ${selectedFile?.path === script.path ? styles.activeTreeItem : ''}`}
+                    onClick={() => handleSelectFile(script)}
+                  >
+                    <span className={styles.itemIcon}>
+                      {getFileIcon(script.name)} 
+                    </span>
+                    {script.name}
+                  </div>
+                ))}
               </div>
             )}
           </div>
         </aside>
 
         <div className={styles.mainArea}>
-          <VisualFlowCanvas 
-            selectedPolicy={selectedPolicy}
-            onSelectPolicy={handleSelectPolicy}
-            requestFlowDraft={requestFlowDraft}
-            responseFlowDraft={responseFlowDraft}
-            onDropPolicy={handleDropPolicy}
-            onRemovePolicy={handleRemovePolicy}
-            isTarget={selectedFile?.type === 'TargetEndpoint'}
-          />
+          {/* Agregamos este wrapper con flex: 1 */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            {selectedPolicy ? (
+              <PolicyDetailView 
+                policy={selectedPolicy} 
+                xmlCode={xmlCode}
+                onClose={() => setSelectedPolicy(null)}
+                onSave={handleSave}
+              />
+            ) : (
+              <VisualFlowCanvas 
+                selectedPolicy={selectedPolicy}
+                onSelectPolicy={handleSelectPolicy}
+                requestFlowDraft={requestFlowDraft}
+                responseFlowDraft={responseFlowDraft}
+                onDropPolicy={handleDropPolicy}
+                onRemovePolicy={handleRemovePolicy}
+                isTarget={selectedFile?.type === 'TargetEndpoint'}
+              />
+            )}
+          </div>
 
+          {/* El editor ahora tendrá su espacio garantizado abajo */}
           <CodeEditor 
             code={xmlCode} 
             setCode={(newVal) => {
@@ -1131,15 +1192,15 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
           />
         </div>
 
-        <PolicyInspector 
-          policy={selectedPolicy} 
-          isOpen={isInspectorOpen} 
-          onClose={() => setIsInspectorOpen(false)} 
+        <PolicyInspector
+          policy={selectedPolicy}
+          isOpen={isInspectorOpen}
+          onClose={() => setIsInspectorOpen(false)}
         />
 
         {!isInspectorOpen && (
-          <button 
-            className={styles.inspectorToggle} 
+          <button
+            className={styles.inspectorToggle}
             onMouseDown={handleInspectorMouseDown}
             onClick={() => {
               if (!hasMovedInspector.current) {

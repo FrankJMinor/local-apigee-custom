@@ -1178,3 +1178,48 @@
   filter: url(#neonGlowIcon);
   opacity: 1;
 }
+
+.iconAction {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 6px;
+  border-radius: 8px; /* Redondeado como la imagen */
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative; /* Para el tooltip */
+}
+
+/* El resaltado Cian de la captura */
+.iconAction:hover {
+  background: rgba(0, 209, 255, 0.15); /* Cian transparente */
+  color: #00d1ff;
+  box-shadow: inset 0 0 0 1px rgba(0, 209, 255, 0.3);
+}
+
+/* Tooltip personalizado */
+.iconAction::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 120%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  border: 1px solid #334155;
+  z-index: 100;
+}
+
+.iconAction:hover::after {
+  opacity: 1;
+}

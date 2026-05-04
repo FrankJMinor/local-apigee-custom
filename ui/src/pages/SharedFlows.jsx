@@ -1,16 +1,42 @@
-import { useState } from 'react'
-import { SHARED_FLOWS } from '../data/mock'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom';
 import { StatusBadge } from '../components/StatusBadge'
 import { IconRefresh, IconRocket } from '../components/Icons'
-import { formatDate } from '../utils/format'
 import { getDotColor, isErrorState } from '../utils/states'
 import s from './table.module.css'
 
+
 function SharedFlows() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('')
+  const [sharedFlows, setSharedFlows] = useState([])
+  const [loading, setLoading] = useState(false)
+
+  const loadSharedFlows = () => {
+    setLoading(true)
+    fetch('http://localhost:8446/v1/sharedflows/deployed')
+      .then(res => res.json())
+      .then(data => {
+        const list = data.shared_flows || []
+        const rev = data.revision || '1'
+        setSharedFlows(list.map(name => ({
+          name,
+          revision: rev,
+          state: 'deployed',
+          usage: '-',
+          lastModified: '-',
+        })))
+      })
+      .catch(() => setSharedFlows([]))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    loadSharedFlows()
+  }, [])
 
   const searchLower = search.toLowerCase()
-  const filtered = SHARED_FLOWS.filter(r =>
+  const filtered = sharedFlows.filter(r =>
     [r.name, r.revision, r.state].join(' ').toLowerCase().includes(searchLower)
   )
 
@@ -22,8 +48,8 @@ function SharedFlows() {
           <p className={s.pageSub}>Gestiona los flujos compartidos reutilizables entre tus proxies de API.</p>
         </div>
         <div className={s.pageActions}>
-          <button className={s.btnSecondary}>
-            <IconRefresh size={14} /> Actualizar
+          <button className={s.btnSecondary} onClick={loadSharedFlows} disabled={loading}>
+            <IconRefresh size={14} /> {loading ? 'Actualizando...' : 'Actualizar'}
           </button>
           <button className={s.btnPrimary}>+ Nuevo Flow</button>
         </div>
@@ -40,7 +66,7 @@ function SharedFlows() {
               onChange={e => setSearch(e.target.value)}
             />
           </div>
-          <span className={s.countLabel}>{filtered.length} de {SHARED_FLOWS.length} shared flows</span>
+          <span className={s.countLabel}>{filtered.length} de {sharedFlows.length} shared flows</span>
         </div>
 
         <div className={s.tableWrapper}>
@@ -63,15 +89,21 @@ function SharedFlows() {
                   <td>
                     <span className={s.nameCell}>
                       <span className={s.dot} style={{ background: getDotColor(row.state) }} />
-                      <span className={s.itemName}>{row.name}</span>
+                      <span
+                        className={s.itemName}
+                        style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                        onClick={() => navigate(`/shared-flows/${row.name}`)}
+                      >
+                        {row.name}
+                      </span>
                     </span>
                   </td>
-                  <td><span className={s.revBadge}>v{row.revision}</span></td>
+                  <td><span className={s.revBadge}>{row.revision ? `v${row.revision}` : '-'}</span></td>
                   <td><StatusBadge status={row.state} /></td>
                   <td style={{ color: 'var(--text-secondary)', fontSize: '0.9em' }}>
-                    {row.usage} proxies
+                    {row.usage}
                   </td>
-                  <td className={s.dateCell}>{formatDate(row.lastModified)}</td>
+                  <td className={s.dateCell}>{row.lastModified}</td>
                   <td>
                     <button
                       className={`${s.deployBtn} ${isErrorState(row.state) ? s.deployBtnDisabled : ''}`}

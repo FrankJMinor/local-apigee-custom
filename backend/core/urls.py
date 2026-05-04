@@ -20,17 +20,28 @@ from django.contrib import admin
 from django.urls import path
 
 # IMPORTANTE: Importamos desde 'api.views' (ruta absoluta), no desde '.'
-from APIs.views import ApigeeOrganizationApisView, ProxyTreeView
-from APIs.views import ProxyDeployedListView, ProxyFileListView, ProxyFileContentView, ProxyFileUpdateView
+from APIs.views import ProxyDeployedListView
+from APIs.views import SharedFlowDeployedListView
+from APIs.views import ProxyFileListView
+from APIs.views import SharedFlowFileListView
+from APIs.views import ApigeeOrganizationApisView
 
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    # Definimos las rutas directamente aquí como en tu proyecto viejo
-    path('v1/proxies/<str:proxy_name>/tree', ProxyTreeView.as_view()),
-    path('v1/proxies/deployed', ProxyDeployedListView.as_view()),
-    path('v1/proxies/<str:proxy_name>/files', ProxyFileListView.as_view()),
-    path('v1/proxies/<str:proxy_name>/content', ProxyFileContentView.as_view()),
-    path('v1/proxies/<str:proxy_name>/update', ProxyFileUpdateView.as_view()),
+    
     path('v1/organizations/<str:org>/apis', ApigeeOrganizationApisView.as_view()),
+    
+    # Ruta para listar proxies desplegados (sin detalles de archivos)
+    path('v1/proxies/deployed', ProxyDeployedListView.as_view()),
+    
+    # Rutas para operaciones de archivos dentro de un proxy específico
+    path('v1/proxies/<str:proxy_name>/files', ProxyFileListView.as_view()),
+    
+    # Ruta para listar shared flows desplegados (sin detalles de archivos)
+    path('v1/sharedflows/deployed', SharedFlowDeployedListView.as_view()),
+    
+    # Rutas para operaciones de archivos dentro de un shared flow específico
+    path('v1/sharedflows/<str:shared_flow_name>/files', SharedFlowFileListView.as_view()),
+    
 ]

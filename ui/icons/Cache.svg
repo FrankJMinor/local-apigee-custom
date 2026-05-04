@@ -1,0 +1,46 @@
+<svg width="400px" height="400px" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Filtro de resplandor neón Amarillo (Traffic Management) -->
+    <filter id="neonGlowIcon" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
+      <feMerge>
+        <feMergeNode in="coloredBlur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Marco exterior redondeado -->
+  <rect x="10" y="10" width="80" height="80" rx="12" 
+        fill="none" 
+        stroke="#FFD700" 
+        stroke-width="2.5" 
+        filter="url(#neonGlowIcon)" 
+        opacity="0.9" />
+
+  <!-- Diamante central (Rombo) -->
+  <rect x="30" y="30" width="40" height="40" 
+        fill="none" 
+        stroke="#FFD700" 
+        stroke-width="2.5" 
+        transform="rotate(45 50 50)" 
+        filter="url(#neonGlowIcon)" />
+
+  <!-- Flechas de tráfico (Triple bifurcación) -->
+  <g filter="url(#neonGlowIcon)" stroke="#FFD700" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Tronco base -->
+    <path d="M50 68 V55" />
+    
+    <!-- Flecha central -->
+    <path d="M50 55 V38" />
+    <path d="M45 44 L50 38 L55 44" />
+    
+    <!-- Flecha izquierda -->
+    <path d="M50 55 Q40 55 35 48" />
+    <path d="M34 54 L35 48 L41 50" />
+    
+    <!-- Flecha derecha -->
+    <path d="M50 55 Q60 55 65 48" />
+    <path d="M59 50 L65 48 L66 54" />
+  </g>
+</svg>

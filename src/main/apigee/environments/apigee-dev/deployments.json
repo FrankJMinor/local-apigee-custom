@@ -10,5 +10,12 @@
       "name": "REVERSE-proxy"
     }
   ],
-  "sharedflows": []
+  "sharedflows": [
+    {
+      "name": "sf-error-manage-v1"
+    },
+    {
+      "name": "sf-test"
+    }
+  ]
 }

@@ -5,6 +5,7 @@ import Dashboard    from './pages/Dashboard'
 import ApiProxies   from './pages/ApiProxies'
 import ProxyDetailPage from './pages/ProxyDetailPage'
 import SharedFlows  from './pages/SharedFlows'
+import SharedFlowDetailPage from './pages/SharedFlowDetailPage';
 import KeyValueMaps from './pages/KeyValueMaps'
 import Configuracion  from './pages/Configuracion'
 import TraceAnalyzer  from './pages/TraceAnalyzer'
@@ -24,6 +25,7 @@ function App() {
         <Route path="/proxies"      element={<ApiProxies />} />
         <Route path="/proxies/:proxyName" element={<ProxyDetailPage />} />
         <Route path="/shared-flows" element={<SharedFlows />} />
+        <Route path="/shared-flows/:sharedFlowName" element={<SharedFlowDetailPage />} />
         <Route path="/kvm"          element={<KeyValueMaps />} />
         <Route path="/config"       element={<Configuracion />} />
         <Route path="/trace"        element={<TraceAnalyzer />} />

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { STATS as MOCK_STATS, RECENT_ACTIVITY, SYSTEM_ALERTS } from '../data/mock'
+import { fetchDeployedSharedFlowsCount } from '../utils/fetchDeployedSharedFlowsCount'
 import { timeAgo } from '../utils/format'
 import { IconActivity, IconAlert, IconRefresh } from '../components/Icons'
 import { fetchDeployedProxiesCount } from '../utils/fetchDeployedProxiesCount'
@@ -34,19 +35,25 @@ function Dashboard() {
   const [loading, setLoading] = useState(false)
 
 
-  // Función para cargar el total de proxies desplegados
-  const loadProxiesCount = () => {
+
+  // Función para cargar el total de proxies y shared flows desplegados
+  const loadCounts = () => {
     setLoading(true)
-    fetchDeployedProxiesCount().then(total => {
-      setStats(prev => prev.map(stat =>
-        stat.label === 'API Proxies' ? { ...stat, value: total } : stat
-      ))
+    Promise.all([
+      fetchDeployedProxiesCount(),
+      fetchDeployedSharedFlowsCount()
+    ]).then(([proxiesTotal, sharedFlowsTotal]) => {
+      setStats(prev => prev.map(stat => {
+        if (stat.label === 'API Proxies') return { ...stat, value: proxiesTotal }
+        if (stat.label === 'Shared Flows') return { ...stat, value: sharedFlowsTotal }
+        return stat
+      }))
       setLoading(false)
     })
   }
 
   useEffect(() => {
-    loadProxiesCount()
+    loadCounts()
     // eslint-disable-next-line
   }, [])
 
@@ -58,7 +65,7 @@ function Dashboard() {
           <p className={s.pageSub}>Vista general de tu entorno de API Management.</p>
         </div>
         <div className={s.pageActions}>
-          <button className={s.btnSecondary} onClick={loadProxiesCount} disabled={loading}>
+          <button className={s.btnSecondary} onClick={loadCounts} disabled={loading}>
             <IconRefresh size={15} /> {loading ? 'Actualizando...' : 'Actualizar'}
           </button>
           <button className={s.btnPrimary}>+ Nuevo Proxy</button>

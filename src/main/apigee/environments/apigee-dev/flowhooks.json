@@ -1,1 +1,22 @@
-{}
+{
+  "PreProxyFlowHook": {
+    "continueOnError": true,
+    "sharedFlow": "sf-error-manage-v1",
+    "description": "Shared flow enforced before a proxy endpoint executes."
+  },
+  "PreTargetFlowHook": {
+    "continueOnError": true,
+    "sharedFlow": "sf-test",
+    "description": "Shared flow enforced before a target endpoint executes."
+  },
+  "PostTargetFlowHook": {
+    "continueOnError": true,
+    "sharedFlow": "sf-error-manage-v1",
+    "description": "Shared flow enforced after a target response executes."
+  },
+  "PostProxyFlowHook": {
+    "continueOnError": true,
+    "sharedFlow": "sf-error-manage-v1",
+    "description": "Shared flow enforced after the proxy endpoint and right before the response is sent out to the client."
+  }
+}
