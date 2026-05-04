@@ -1,0 +1,41 @@
+<svg width="400px" height="400px" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Filtro de resplandor neón Cian -->
+    <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
+      <feMerge>
+        <feMergeNode in="coloredBlur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Marco exterior redondeado (Contenedor neón) -->
+  <rect x="10" y="10" width="80" height="80" rx="12" 
+        fill="none" 
+        stroke="#00D1FF" 
+        stroke-width="2.5" 
+        filter="url(#neonGlow)" 
+        opacity="0.9" />
+
+  <!-- Las dos tarjetas/documentos -->
+  <g filter="url(#neonGlow)" stroke="#00D1FF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Tarjeta del fondo (Offset a la izquierda) -->
+    <rect x="28" y="38" width="22" height="30" rx="3" opacity="0.6" />
+    <!-- Tarjeta del frente (Offset a la derecha) -->
+    <rect x="48" y="28" width="22" height="30" rx="3" />
+  </g>
+
+  <!-- La flecha curva de transferencia -->
+  <path d="M38 58 Q42 45 55 45" 
+        stroke="#00D1FF" 
+        stroke-width="4" 
+        fill="none" 
+        stroke-linecap="round" 
+        filter="url(#neonGlow)" />
+        
+  <!-- Punta de la flecha -->
+  <path d="M50 40 L57 45 L50 50" 
+        fill="#00D1FF" 
+        filter="url(#neonGlow)" />
+</svg>

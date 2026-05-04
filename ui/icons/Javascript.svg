@@ -1,0 +1,28 @@
+<svg width="400px" height="400px" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Filtro de resplandor neón azul para categoría Extension -->
+    <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
+      <feMerge>
+        <feMergeNode in="coloredBlur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Marco exterior redondeado -->
+  <rect x="10" y="10" width="80" height="80" rx="12" 
+        fill="none" 
+        stroke="#1E90FF" 
+        stroke-width="2.5" 
+        filter="url(#neonGlow)" 
+        opacity="0.9" />
+
+  <!-- Texto JS convertido a Path para mejor efecto neón -->
+  <g filter="url(#neonGlow)" stroke="#1E90FF" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Letra J -->
+    <path d="M42 35 H52 V60 Q52 70 42 70 Q35 70 32 65" />
+    <!-- Letra S -->
+    <path d="M72 40 Q72 35 62 35 Q52 35 52 45 Q52 52 62 52 Q72 52 72 60 Q72 70 62 70 Q52 70 52 65" />
+  </g>
+</svg>

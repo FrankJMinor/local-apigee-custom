@@ -1,0 +1,36 @@
+<svg width="400px" height="400px" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Filtro de resplandor neón Cian -->
+    <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
+      <feMerge>
+        <feMergeNode in="coloredBlur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Marco exterior (Categoría Mediation) -->
+  <rect x="10" y="10" width="80" height="80" rx="12" 
+        fill="none" 
+        stroke="#00D1FF" 
+        stroke-width="2.5" 
+        filter="url(#neonGlow)" 
+        opacity="0.9" />
+
+  <!-- Flecha superior (Entrada de datos) -->
+  <g filter="url(#neonGlow)" stroke="#00D1FF" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M50 22 V35" />
+    <path d="M44 29 L50 35 L56 29" />
+  </g>
+
+  <!-- Símbolos de código </> -->
+  <g filter="url(#neonGlow)" stroke="#00D1FF" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Menor que (<) -->
+    <path d="M38 52 L28 65 L38 78" />
+    <!-- Barra (/) -->
+    <path d="M55 45 L45 85" />
+    <!-- Mayor que (>) -->
+    <path d="M62 52 L72 65 L62 78" />
+  </g>
+</svg>

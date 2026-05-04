@@ -1,0 +1,31 @@
+<svg width="400px" height="400px" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Filtro de resplandor neón azul -->
+    <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
+      <feMerge>
+        <feMergeNode in="coloredBlur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Marco exterior (Contenedor neón categoría Extension) -->
+  <rect x="10" y="10" width="80" height="80" rx="12" 
+        fill="none" 
+        stroke="#1E90FF" 
+        stroke-width="2.5" 
+        filter="url(#neonGlow)" 
+        opacity="0.9" />
+
+  <!-- Icono interno: Trayectoria de flujo con flecha -->
+  <g filter="url(#neonGlow)" stroke="#1E90FF" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    
+    <!-- Trayectoria del flujo (el "salto") -->
+    <path d="M22 68 H35 L43 32 H57 L65 68 H75" />
+    
+    <!-- Punta de la flecha -->
+    <path d="M72 62 L78 68 L72 74" stroke-width="3" />
+    
+  </g>
+</svg>

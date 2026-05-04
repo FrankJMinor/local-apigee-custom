@@ -1,0 +1,46 @@
+<svg width="400px" height="400px" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Resplandor neón Cian (Mediación) -->
+    <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
+      <feMerge>
+        <feMergeNode in="coloredBlur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    
+    <!-- Resplandor neón Verde (Validación OK) -->
+    <filter id="okGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+      <feMerge>
+        <feMergeNode in="coloredBlur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Marco exterior (Contenedor neón) -->
+  <rect x="10" y="10" width="80" height="80" rx="12" 
+        fill="none" 
+        stroke="#00D1FF" 
+        stroke-width="2.5" 
+        filter="url(#neonGlow)" 
+        opacity="0.9" />
+
+  <!-- La "Nube" o burbuja de mensaje -->
+  <path d="M30 55 Q20 55 20 45 Q20 35 30 35 Q30 25 45 25 Q60 25 60 35 Q75 35 75 45 Q75 55 65 55 L70 65 L55 55 H35 L30 65 Z" 
+        fill="none" 
+        stroke="#00D1FF" 
+        stroke-width="3" 
+        stroke-linejoin="round" 
+        filter="url(#neonGlow)" />
+
+  <!-- El Checkmark (Validación) -->
+  <path d="M40 45 L48 53 L62 38" 
+        fill="none" 
+        stroke="#00FF85" 
+        stroke-width="5" 
+        stroke-linecap="round" 
+        stroke-linejoin="round" 
+        filter="url(#okGlow)" />
+</svg>

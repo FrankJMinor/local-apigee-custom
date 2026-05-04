@@ -53,8 +53,16 @@ loader.init().then(monaco => {
     );
   }
 });
+
+// Importación de iconos específicos para políticas (puedes agregar más según necesites)
 import AssignMessageSVG from '../../icons/AssignMessage.svg';
+import CloudSVG from '../../icons/Cloud.svg';
+import ExtractVariablesSVG from '../../icons/ExtractVariables.svg';
+import FlowCalloutSVG from '../../icons/FlowCallout.svg';
+import JavascriptSVG from '../../icons/Javascript.svg';
+import JSONToXMLSVG from '../../icons/JSONToXML.svg';
 import KeyValueMapOperationsSVG from '../../icons/KeyValueMapOperations.svg';
+import RaiseFaultSVG from '../../icons/RaiseFault.svg';
 import styles from './ProxyDetail.module.css';
 
 // ── SUB-COMPONENT: NeonFilter ──────────────────────────────────────────────
@@ -80,21 +88,54 @@ const getPolicyTypeClass = (name) => {
   return styles.policyTraffic;
 };
 
+
+
 const getPolicyIcon = (type, className, size = 24) => {
   const t = type || "";
-  if (t === 'AssignMessage') return <img src={AssignMessageSVG} className={className} style={{ width: size, height: size }} alt="AssignMessage" />;
-  if (t === 'KeyValueMapOperations') return <img src={KeyValueMapOperationsSVG} className={className} style={{ width: size, height: size }} alt="KeyValueMapOperations" />;
-  if (t === 'VerifyAPIKey') return <IconVerifyAPIKey size={size} className={className} />;
-  if (t === 'Quota') return <IconQuota size={size} className={className} />;
-  if (t === 'JSONToXML' || t === 'XMLToJSON') return <IconXMLJSON size={size} className={className} />;
-  if (t === 'SpikeArrest') return <IconSpikeArrest size={size} className={className} />;
-  if (t === 'Diana') return <IconDiana size={size} className={className} />;
-  if (t === 'KVM') return <IconKVM size={size} className={className} />;
-  if (t === 'Set') return <IconSet size={size} className={className} />;
-  if (t === 'Cloud') return <IconCloud size={size} className={className} />;
-  if (t === 'Laptop') return <IconLaptop size={size} className={className} />;
   
-  return <span className={className} style={{fontSize: size === 14 ? '12px' : '18px', display: 'inline-block', textAlign: 'center', width: `${size}px`}}>⚡</span>;
+  // Estilo base para aplicar el efecto neón de tu componente NeonFilter
+  const iconStyle = { 
+    width: size, 
+    height: size, 
+    filter: 'url(#neonGlowIcon)' 
+  };
+
+  // REGLA DE LA NUBE: Múltiples políticas usan el mismo icono
+  const cloudPolicies = [
+    'MonetizationLimitsCheck',
+    'XSLTransform',
+    'OpenAPISpecValidation',
+    'SOAPMessageValidation',
+    'AccessEntity'
+  ];
+
+  if (cloudPolicies.includes(t) || t === 'Cloud') {
+    return <img src={CloudSVG} className={className} style={iconStyle} alt="Cloud Policy" />;
+  }
+
+  // Mapeo de iconos específicos
+  switch (t) {
+    case 'AssignMessage':
+      return <img src={AssignMessageSVG} className={className} style={iconStyle} alt={t} />;
+    case 'ExtractVariables':
+      return <img src={ExtractVariablesSVG} className={className} style={iconStyle} alt={t} />;
+    case 'FlowCallout':
+      return <img src={FlowCalloutSVG} className={className} style={iconStyle} alt={t} />;
+    case 'Script':
+    case 'Javascript':
+      return <img src={JavascriptSVG} className={className} style={iconStyle} alt={t} />;
+    case 'JSONToXML':
+    case 'XMLToJSON':
+      return <img src={JSONToXMLSVG} className={className} style={iconStyle} alt={t} />;
+    case 'KeyValueMapOperations':
+    case 'KVM':
+      return <img src={KeyValueMapOperationsSVG} className={className} style={iconStyle} alt={t} />;
+    case 'RaiseFault':
+      return <img src={RaiseFaultSVG} className={className} style={iconStyle} alt={t} />;
+    default:
+      // Fallback por si la política no está mapeada aún
+      return <span className={className} style={{ fontSize: size === 14 ? '12px' : '18px' }}>⚙️</span>;
+  }
 };
 
 // ── SUB-COMPONENT: VisualFlowCanvas ──────────────────────────────────────────
