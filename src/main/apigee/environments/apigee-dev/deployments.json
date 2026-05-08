@@ -4,16 +4,10 @@
       "name": "HelloWorld"
     },
     {
-      "name": "post-activation-v1"
-    },
-    {
       "name": "REVERSE-proxy"
     }
   ],
   "sharedflows": [
-    {
-      "name": "sf-error-manage-v1"
-    },
     {
       "name": "sf-test"
     }
