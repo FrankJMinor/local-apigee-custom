@@ -104,9 +104,10 @@ const getFileIcon = (fileName, size = 14) => {
   return <span style={{ marginRight: '6px' }}>📄</span>;
 };
 
-const getPolicyIcon = (type, className, size = 24) => {
+const getPolicyIcon = (type, className) => {
   const t = type || "";
-  const iconStyle = { width: size, height: size, filter: 'url(#neonGlowIcon)' };
+  // Eliminamos width/height/size fijos para control total por CSS (.trackIcon)
+  const iconStyle = { filter: 'url(#neonGlowIcon)' };
 
   // REGLA DE LA NUBE
   const cloudPolicies = [
@@ -139,9 +140,9 @@ const getPolicyIcon = (type, className, size = 24) => {
     case 'KeyValueMapOperations': case 'KVM': return <img src={KeyValueMapOperationsSVG} className={className} style={iconStyle} />;
     case 'RaiseFault': return <img src={RaiseFaultSVG} className={className} style={iconStyle} />;
     case 'SpikeArrest': return <img src={SpikeArrestSVG} className={className} style={iconStyle} />;
-    case 'Laptop': return <IconLaptop size={size} className={className} />;
-    case 'Set': return <IconSet size={size} className={className} />;
-    default: return <span style={{ fontSize: size === 14 ? '12px' : '18px', marginRight: '6px' }}>⚙️</span>;
+    case 'Laptop': return <IconLaptop className={className} style={iconStyle} />;
+    case 'Set': return <IconSet className={className} style={iconStyle} />;
+    default: return <span className={className} style={{ ...iconStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>⚙️</span>;
   }
 };
 
@@ -205,7 +206,7 @@ const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy, requestFlowDraft, re
                   onClick={() => onSelectPolicy(step)}
                 >
                   <div className={styles.iconContainer}>
-                    {getPolicyIcon(step.type, styles.trackIcon, 24)}
+                    {getPolicyIcon(step.type, styles.trackIcon)}
                     {!isEndpoint && (
                       <button
                         className={styles.removeStepBtn}
@@ -215,11 +216,14 @@ const VisualFlowCanvas = ({ selectedPolicy, onSelectPolicy, requestFlowDraft, re
                         }}
                         title="Remove Policy"
                       >
-                        <IconX size={10} />
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
                       </button>
                     )}
                   </div>
-                  <span className={styles.stepLabel}>{step.name}</span>
+                  <span className={styles.stepLabel} title={step.name}>{step.name}</span>
                 </div>
                 {idx < steps.length - 1 && (
                   <FlowConnection
