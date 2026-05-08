@@ -338,7 +338,7 @@ PolicyInspector.propTypes = {
 };
 
 // ── SUB-COMPONENT: CodeEditor (Reemplaza a XmlEditor) ───────────────────────
-const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollapsed, onToggleCollapse, selectedFile, onSave, onPlay, isSaving, proxyName }) => {
+const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollapsed, onToggleCollapse, selectedFile, onSave, onPlay, isSaving, proxyName, onReset }) => {
   const language = selectedFile?.full_name?.endsWith('.js') ? 'javascript' : 'xml';
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
@@ -429,7 +429,11 @@ const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollaps
             <IconSave size={15} />
           </button>
 
-          <button className={styles.iconAction} data-tooltip="Reiniciar Editor">
+          <button 
+            className={styles.iconAction} 
+            onClick={onReset} 
+            data-tooltip="Reiniciar Editor"
+            >
             <IconRefresh size={15} />
           </button>
 
@@ -486,7 +490,8 @@ CodeEditor.propTypes = {
   onSave: PropTypes.func.isRequired,
   onPlay: PropTypes.func.isRequired,
   isSaving: PropTypes.bool,
-  proxyName: PropTypes.string
+  proxyName: PropTypes.string,
+  onReset: PropTypes.func // <-- Añade esta línea
 };
 
 // ── MAIN COMPONENT: ProxyDetail ──────────────────────────────────────────────
@@ -945,7 +950,17 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
       setIsSaving(false);
     }
   };
-
+  const handleResetEditor = () => {
+    if (!selectedFile || selectedFile.content === undefined) return;
+    
+    if (window.confirm('¿Descartar cambios no guardados y restaurar el código original?')) {
+      setXmlCode(selectedFile.content);
+      setFileCache(prev => ({ 
+        ...prev, 
+        [selectedFile.path]: selectedFile.content 
+      }));
+    }
+  };
   const handlePlay = async () => {
     await handleSave();
     alert('Proxy actualizado en el emulador');
@@ -1193,6 +1208,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             onPlay={handlePlay}
             isSaving={isSaving}
             proxyName={proxy.name}
+            onReset={handleResetEditor} // <-- Añade esta línea
           />
         </div>
 
