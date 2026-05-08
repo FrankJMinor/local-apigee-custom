@@ -52,3 +52,6 @@ Desktop.ini
 *.log
 logs/
 npm-debug.log*
+
+# ── Otros archivos generados ─────────────────────────
+bitacora.sh
