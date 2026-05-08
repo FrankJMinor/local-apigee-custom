@@ -338,7 +338,7 @@ PolicyInspector.propTypes = {
 };
 
 // ── SUB-COMPONENT: CodeEditor (Reemplaza a XmlEditor) ───────────────────────
-const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollapsed, onToggleCollapse, selectedFile, onSave, onPlay, isSaving, proxyName, onReset }) => {
+const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollapsed, onToggleCollapse, selectedFile, onSave, onPlay, isSaving, proxyName, onReset, isVolatile }) => {
   const language = selectedFile?.full_name?.endsWith('.js') ? 'javascript' : 'xml';
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
@@ -406,9 +406,12 @@ const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollaps
       <div className={styles.codeHeader}>
         <div className={styles.codeTabs}>
           <div className={`${styles.codeTab} ${styles.activeCodeTab}`}>
-            {selectedFile?.full_name?.endsWith('.js') ? <span style={{ color: '#f59e0b', marginRight: '6px', fontSize: '10px' }}>JS</span> : <span style={{ color: '#3b82f6', marginRight: '6px', fontSize: '10px' }}>XML</span>}
-            {selectedFile?.full_name || 'config.xml'}
-            {isModified && <span className={styles.unsavedDot} />}
+            <span style={{ 
+              fontStyle: isVolatile ? 'italic' : 'normal', 
+              opacity: isVolatile ? 0.8 : 1 
+            }}>
+              {selectedFile?.full_name || 'config.xml'}
+            </span>
           </div>
         </div>
         <div className={styles.codeActions}>
@@ -505,6 +508,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [isEditorCollapsed, setIsEditorCollapsed] = useState(false);
   const [xmlCode, setXmlCode] = useState('');
+  const [isVolatile, setIsVolatile] = useState(true);
   const [fileCache, setFileCache] = useState({}); // Cache para persistir cambios entre archivos
   const [isSaving, setIsSaving] = useState(false);
 
@@ -694,55 +698,55 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     };
   }, [handleMouseMove, handleMouseUp]);
 
-  const handleSelectFile = async (file) => {
-    // 1. Seteamos el archivo actual
-    setSelectedFile(file);
+  const handleSelectFile = async (file, forcePin = false) => {
+  // 1. Seteamos el archivo actual y el estado de la pestaña
+  setSelectedFile(file);
+  setIsVolatile(!forcePin);
 
-    // 2. LOGICA DE NAVEGACIÓN (Detalle vs Flujo)
-    // Si el path contiene 'policies', abrimos el detalle; si no, volvemos al flujo.
-    if (file.path.includes('policies/')) {
-      setSelectedPolicy({ 
-        name: file.name, 
-        type: file.type || 'Mediation' 
-      });
-    } else {
-      setSelectedPolicy(null);
+  // 2. Lógica de Navegación (Políticas vs Flujo)
+  if (file.path && file.path.includes('policies/')) {
+    setSelectedPolicy({ 
+      name: file.name, 
+      type: file.type || 'Mediation' 
+    });
+  } else {
+    setSelectedPolicy(null);
+  }
+
+  // 3. Lógica de Flujos (Endpoints)
+  if (file.type === 'ProxyEndpoint' || file.type === 'TargetEndpoint') {
+    setSelectedFlow({ name: 'PreFlow', method: 'ALL' });
+  } else {
+    setSelectedFlow(null);
+  }
+
+  // 4. Carga de Contenido (Cache -> API)
+  // Declaramos 'initialContent' UNA SOLA VEZ
+  const initialContent = file.content !== undefined ? file.content : fileCache[file.path];
+
+  if (initialContent !== undefined) {
+    setXmlCode(initialContent);
+    
+    // Sincronizar cache si es necesario
+    if (fileCache[file.path] === undefined) {
+      setFileCache(prev => ({ ...prev, [file.path]: initialContent }));
     }
+    return; // Salimos si ya tenemos los datos
+  }
 
-    // 3. LOGICA DE FLUJOS (Endpoints)
-    // Si es un Endpoint, seleccionamos PreFlow por defecto.
-    if (file.type === 'ProxyEndpoint' || file.type === 'TargetEndpoint') {
-      setSelectedFlow({ name: 'PreFlow', method: 'ALL' });
-    } else {
-      setSelectedFlow(null);
+  // Fallback: Fetch desde el backend
+  try {
+    const response = await fetch(`http://localhost:8446/v1/proxies/${proxy.name}/content?path=${encodeURIComponent(file.path)}`);
+    const data = await response.json();
+    if (data.content) {
+      setXmlCode(data.content);
+      setFileCache(prev => ({ ...prev, [file.path]: data.content }));
     }
-
-    // 4. CARGA DE CONTENIDO (Cache -> API)
-    const initialContent = file.content !== undefined ? file.content : fileCache[file.path];
-
-    if (initialContent !== undefined) {
-      setXmlCode(initialContent);
-      
-      // Asegurar persistencia en cache si es la primera vez que se lee del tree
-      if (fileCache[file.path] === undefined) {
-        setFileCache(prev => ({ ...prev, [file.path]: initialContent }));
-      }
-      return; // Salimos temprano si ya tenemos el contenido
-    }
-
-    // Fallback: Carga manual desde el backend si no hay contenido en memoria
-    try {
-      const response = await fetch(`http://localhost:8446/v1/proxies/${proxy.name}/content?path=${encodeURIComponent(file.path)}`);
-      const data = await response.json();
-      if (data.content) {
-        setXmlCode(data.content);
-        setFileCache(prev => ({ ...prev, [file.path]: data.content }));
-      }
-    } catch (e) {
-      console.error("Error al cargar contenido:", e);
-      setXmlCode(`<!-- Error al cargar ${file.path} -->`);
-    }
-  };
+  } catch (e) {
+    console.error("Error al cargar contenido:", e);
+    setXmlCode(``);
+  }
+};
 
   const handleSelectPolicy = (policy) => {
     // Buscar el archivo correspondiente en el tree para cargar su contenido
@@ -1044,7 +1048,8 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
                     <div
                       key={policy.path}
                       className={`${styles.treeItem} ${selectedFile?.path === policy.path ? styles.activeTreeItem : ''}`}
-                      onClick={() => handleSelectFile(policy)}
+                      onClick={() => handleSelectFile(policy, false)} // Clic simple: Pestaña volátil
+                      onDoubleClick={() => handleSelectFile(policy, true)} // Doble clic: Pestaña fija
                       {...makePolicyDraggable(policy)}
                     >
                       <span className={styles.itemIcon}>
@@ -1209,6 +1214,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             isSaving={isSaving}
             proxyName={proxy.name}
             onReset={handleResetEditor} // <-- Añade esta línea
+            isVolatile={isVolatile}
           />
         </div>
 
