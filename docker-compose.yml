@@ -1,10 +1,9 @@
-version: '3.8'
-
-# Definimos el volumen compartido
+# Definimos el volumen compartido para contratos de Apigee
 volumes:
   apigee_contracts_vol:
 
 services:
+  # 1. EL EMULADOR (Motor de Apigee)
   apigee-emulator:
     image: gcr.io/apigee-release/hybrid/apigee-emulator:1.15.2
     container_name: apigee-dev
@@ -16,21 +15,49 @@ services:
       - APIGEE_USER=test
       - APIGEE_PASSWORD=test
     volumes:
-      # Montamos /opt/apigee del emulador hacia el volumen compartido
       - apigee_contracts_vol:/opt/apigee
+    networks:
+      - apigee-net
     restart: always
 
-  fake-management-api:
-    build: ./backend # Asegúrate de que esto apunte a donde está tu Dockerfile de Flask
-    container_name: apigee-fake-control-plane
+  # 2. EL BACKEND (Tu API de Python/Django)
+  backend-api:
+    build: ./backend
+    container_name: apigee-control-backend
     ports:
       - "8446:8446"
     environment:
       - TZ=America/Mexico_City
       - DJANGO_SETTINGS_MODULE=core.settings
+      - BASE_PROJECT_PATH=/app/apiproxies
     volumes:
       - ./backend:/app
       - apigee_contracts_vol:/apigee_runtime
+      # MONTAMOS TUS PROXIES LOCALES (Source of Truth)
+      - ./src/main/apigee/apiproxies:/app/apiproxies
     depends_on:
       - apigee-emulator
+    networks:
+      - apigee-net
     restart: always
+
+  # 3. LA UI (Tu Frontend en React)
+  frontend-api:
+    build: ./ui
+    container_name: apigee-dashboard-ui
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./ui:/app
+      - /app/node_modules
+    environment:
+      # AQUÍ está el truco: dentro de Docker, el target es el nombre del servicio
+      - VITE_BACKEND_URL=http://backend-api:8446
+    depends_on:
+      - backend-api
+    networks:
+      - apigee-net
+
+networks:
+  apigee-net:
+    driver: bridge
