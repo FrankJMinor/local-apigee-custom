@@ -205,7 +205,7 @@
 }
 
 .navTree {
-  padding: 0.5rem;
+  padding: 0.5rem 0 0.5rem 0.5rem; /* 0 padding a la derecha */
   overflow-y: auto;
   flex: 1;
 }
@@ -1220,4 +1220,48 @@
 
 .iconAction:hover::after {
   opacity: 1;
+}
+
+/* Project Explorer(Navigator)|Add Policies */
+.treeFolder {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.2s;
+  
+  /* NUEVO: Esto garantiza que la fila use todo el ancho del Navigator */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Busca esta sección cerca de la línea 214 */
+.addPolicyBtn {
+  /* LA CLAVE: Empuja el botón al final del contenedor Flex */
+  margin-left: auto; 
+  
+  background: #f1f5f9; /* Gris clarito como en tu captura */
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 3px; /* Bordes menos redondeados para el look clásico */
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.addPolicyBtn:hover {
+  background: #ffffff;
+  color: #3b82f6;
+  border-color: #3b82f6;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
 }

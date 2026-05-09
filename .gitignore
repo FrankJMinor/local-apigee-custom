@@ -1,3 +1,10 @@
+# ── Dependencias y Builds (Global) ──────────────────
+node_modules/
+dist/
+build/
+.cache/
+.vite/
+
 # ── Claude Code ────────────────────────────────────
 .claude/
 
@@ -19,7 +26,6 @@ venv/
 env/
 *.egg-info/
 .eggs/
-dist/
 
 # ── Apigee emulator — datos generados en runtime ────
 target/emulator/testdata/
@@ -47,11 +53,6 @@ docker-compose.override.yml
 .DS_Store
 Thumbs.db
 Desktop.ini
-
-# ── Logs generales ───────────────────────────────────
-*.log
-logs/
-npm-debug.log*
 
 # ── Otros archivos generados ─────────────────────────
 bitacora.sh

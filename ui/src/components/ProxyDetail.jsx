@@ -970,6 +970,25 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     alert('Proxy actualizado en el emulador');
   };
 
+  const renderFolderHeader = (key, label, onAddClick) => (
+      <div className={styles.treeFolder} onClick={() => toggle(key)}>
+        {expanded[key] ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+        <span className={styles.folderIcon}>📁</span>
+        <span className={styles.folderName}>{label}</span>
+        <button 
+          className={styles.addPolicyBtn} 
+          onClick={(e) => { e.stopPropagation(); onAddClick(); }}
+          title={`Add ${label}`}
+        >
+          {/* Cambiamos IconPlus por este SVG manual */}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+    );
+
   return (
     <div className={styles.detailWrapper}>
       {/* Top Bar: Actions & Breadcrumbs */}
@@ -1017,9 +1036,9 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
       {/* Main Workspace */}
       <div className={styles.workspace} ref={workspaceRef}>
 
-        
+        {/* Left Sidebar: Navigator */}
         <aside className={styles.navigator} style={{ width: navigatorWidth }}>
-          <div className={styles.navHeader}>Project Explorer</div>
+          <div className={styles.navHeader}>Navigator</div>
           <div
             className={`${styles.navResizer} ${isResizingNav ? styles.navResizing : ''}`}
             onMouseDown={handleNavResizeMouseDown}
@@ -1037,10 +1056,10 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             )}
 
             {/* Policies Section */}
-            <div className={styles.treeFolder} onClick={() => toggle('policies')}>
-              {expanded.policies ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
-              <span className={styles.folderIcon}>📁</span> Policies
-            </div>
+            {renderFolderHeader('policies', 'Policies', () => {
+                  console.log("Abrir diálogo de nueva política");
+                })}
+            {/* Solo renderizamos esta sección si el usuario la ha expandido */}
             {expanded.policies && (
               <div className={styles.treeSub}>
                 {Array.isArray(fileTree?.policies) && fileTree.policies.length > 0 ? (
@@ -1064,10 +1083,9 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             )}
 
             {/* Proxy Endpoints Section */}
-            <div className={styles.treeFolder} onClick={() => toggle('proxyEndpoints')}>
-              {expanded.proxyEndpoints ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
-              <span className={styles.folderIcon}>📁</span> Proxy Endpoints
-            </div>
+            {renderFolderHeader('proxyEndpoints', 'Proxy Endpoints', () => {
+                  console.log("Abrir diálogo de nuevo endpoint de proxy");
+                })}
             {expanded.proxyEndpoints && (
               <div className={styles.treeSub}>
                 {Array.isArray(fileTree?.proxy_endpoints) && fileTree.proxy_endpoints.length > 0 ? (
@@ -1104,10 +1122,9 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             )}
 
             {/* Target Endpoints Section */}
-            <div className={styles.treeFolder} onClick={() => toggle('targetEndpoints')}>
-              {expanded.targetEndpoints ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
-              <span className={styles.folderIcon}>📁</span> Target Endpoints
-            </div>
+            {renderFolderHeader('targetEndpoints', 'Target Endpoints', () => {
+                  console.log("Abrir diálogo de nuevo endpoint de destino");
+                })}
             {expanded.targetEndpoints && (
               <div className={styles.treeSub}>
                 {Array.isArray(fileTree?.target_endpoints) && fileTree.target_endpoints.length > 0 ? (
@@ -1144,10 +1161,9 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             )}
 
             {/* Scripts Section */}
-            <div className={styles.treeFolder} onClick={() => toggle('scripts')}>
-              {expanded.scripts ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
-              <span className={styles.folderIcon}>📁</span> Scripts
-            </div>
+            {renderFolderHeader('scripts', 'Scripts', () => {
+                  console.log("Abrir diálogo de nuevo script");
+                })}
 
             {expanded.scripts && (
               <div className={styles.treeSub}>
