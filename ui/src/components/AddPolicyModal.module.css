@@ -1,3 +1,4 @@
+/* 1. Fondo general y Overlay */
 .overlay {
   position: fixed;
   top: 0;
@@ -6,7 +7,7 @@
   bottom: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(205, 209, 216, 0.8);
+  background: rgba(15, 23, 42, 0.8); /* Oscurecido para mayor contraste */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -15,7 +16,7 @@
 }
 
 .modal {
-  background: #ffffff;
+  background: #111827; /* Fondo oscuro principal */
   width: 850px;
   height: 600px;
   border-radius: 12px;
@@ -23,33 +24,35 @@
   flex-direction: column;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   overflow: hidden;
+  border: 1px solid #334155;
 }
 
+/* 2. Header estilizado */
 .header {
   padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #334155;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #ffffff;
+  background: #1f2937;
 }
 
 .headerTitleGroup h2 {
   margin: 0;
   font-size: 1.25rem;
-  color: #1e293b;
+  color: #f8fafc;
   font-weight: 700;
 }
 
 .headerSubtitle {
   font-size: 0.8rem;
-  color: #2953a8;
+  color: #94a3b8; /* Gris azulado suave */
 }
 
 .closeButton {
-  background: #f1f5f9;
+  background: #374151;
   border: none;
-  color: #64748b;
+  color: #94a3b8;
   cursor: pointer;
   padding: 8px;
   border-radius: 50%;
@@ -58,10 +61,11 @@
 }
 
 .closeButton:hover {
-  background: #fee2e2;
-  color: #ef4444;
+  background: #ef4444;
+  color: #ffffff;
 }
 
+/* 3. Contenedor y Sidebar (Panel Izquierdo) */
 .container {
   flex: 1;
   display: flex;
@@ -70,45 +74,18 @@
 
 .sidebar {
   width: 300px;
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid #334155;
   display: flex;
   flex-direction: column;
-  background: #f8fafc !important; /* Forzamos gris muy claro */
-  height: 100%;
-  overflow: hidden; 
+  background: #111827;
 }
 
-.categoryList {
-  flex: 1;
-  overflow-y: auto;
-  padding-bottom: 20px;
-  background: #ffffff !important; /* Forzamos fondo blanco para la lista */
-}
-
-/* Opcional: Personalización de la barra de desplazamiento para que sea discreta */
-.categoryList::-webkit-scrollbar {
-  width: 6px;
-}
-
-.categoryList::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.categoryList::-webkit-scrollbar-thumb {
-  background: #cbd5e1; /* Gris medio */
-  border-radius: 10px;
-  border: 2px solid #ffffff; /* Crea un efecto de separación */
-}
-
-.categoryList::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
+/* Buscador Dark */
 .searchWrapper {
   position: relative;
   padding: 1rem;
-  background: #ffffff;
-  border-bottom: 1px solid #e2e8f0;
+  background: #111827;
+  border-bottom: 1px solid #334155;
 }
 
 .searchIconPos {
@@ -116,131 +93,193 @@
   left: 26px;
   top: 50%;
   transform: translateY(-50%);
-  color: #94a3b8;
+  color: #64748b;
   display: flex;
 }
 
 .searchInput {
   width: 100%;
   padding: 10px 12px 10px 38px;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  background: #1f2937;
+  border: 1px solid #334155;
   border-radius: 6px;
   font-size: 14px;
-  color: #1e293b;
+  color: #f8fafc;
   outline: none;
+}
+
+.searchInput:focus {
+  border-color: #00d1ff;
+}
+
+/* Lista de políticas corregida (sin el fondo blanco) */
+.categoryList {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 20px;
+  background: #111827;
 }
 
 .groupLabel {
   padding: 16px 16px 8px;
   font-size: 11px;
   font-weight: 700;
-  color: #64748b; /* Gris oscuro para los títulos de categoría */
+  color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  background: #f1f5f9; /* Un ligero fondo para separar secciones */
+  background: rgba(31, 41, 55, 0.5);
 }
 
-.policyIconWrapper {
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+/* Scrollbar Dark */
+.categoryList::-webkit-scrollbar {
+  width: 6px;
 }
 
-/* Estilo para el icono SVG dentro del modal */
-.modalPolicyIcon {
-  width: 18px !important;
-  height: 18px !important;
-  transform: scale(1.2); /* Ajuste leve para llenar el espacio */
-  display: block;
+.categoryList::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 10px;
 }
 
-/* Si el icono es un emoji o texto como fallback */
-.modalPolicyIcon span {
-  font-size: 14px;
+.categoryList::-webkit-scrollbar-thumb:hover {
+  background: #475569;
 }
 
+/* Items de la lista */
 .policyItem {
   display: flex;
   align-items: center;
-  gap: 12px; /* Espacio entre icono y texto */
-  padding: 8px 16px;
+  gap: 12px;
+  padding: 10px 16px;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
-  
-  /* Color de las letras forzado a oscuro para que se vea sobre el blanco */
-  color: #1e293b !important; 
-  font-weight: 500;
-  border-bottom: 1px solid #f1f5f9;
+  color: #cbd5e1;
+  border-bottom: 1px solid #1f2937;
 }
 
-/* Hover: gris clarito cuando pasas el mouse */
 .policyItem:hover {
-  background: #f1f7ff !important; 
-  color: #2563eb !important; /* Azul al pasar el mouse */
+  background: #1f2937;
+  color: #00d1ff;
 }
 
-/* Activo: fondo azul con letras blancas (Estilo Apigee) */
 .policyItem.active {
-  background: #3b82f6 !important; 
-  color: #ffffff !important; 
+  background: rgba(0, 209, 255, 0.1) !important;
+  color: #00d1ff !important; 
+  border-left: 3px solid #00d1ff;
+  font-weight: 600;
 }
 
+.modalPolicyIcon {
+  width: 18px !important;
+  height: 18px !important;
+  filter: drop-shadow(0 0 5px rgba(0, 209, 255, 0.3));
+}
+
+/* 4. Área de Formulario (Panel Derecho) */
 .formArea {
   flex: 1;
   padding: 2.5rem;
-  background: #ffffff;
+  background: #0f172a; /* Color idéntico al editor principal */
+  overflow-y: auto;
 }
 
-.heroInfo h3 { font-size: 1.75rem; color: #0f172a; margin: 0 0 0.5rem 0; }
-.heroInfo p { color: #475569; font-size: 0.95rem; line-height: 1.6; }
+.heroInfo h3 {
+  font-size: 1.75rem;
+  color: #f8fafc;
+  margin: 0 0 0.5rem 0;
+}
 
-.inputField { margin-bottom: 1.5rem; }
-.inputField label { display: block; font-size: 0.75rem; font-weight: 700; color: #64748b; margin-bottom: 0.5rem; }
-.inputField input { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; color: #1e293b; background: #f8fafc; }
+.heroInfo p {
+  color: #94a3b8;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
 
+.inputField {
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inputField label {
+  color: #00d1ff; /* Labels en cian neón */
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.inputField input {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #ffffff;
+  padding: 12px;
+  border-radius: 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.inputField input:focus {
+  border-color: #00d1ff;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 209, 255, 0.2);
+}
+
+/* 5. Footer y Botones */
 .footer {
   padding: 1.25rem 1.5rem;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid #334155;
+  background: #1f2937;
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  background: #f8fafc;
 }
 
 .btnCancel {
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  color: #475569;
+  background: transparent;
+  border: 1px solid #334155;
+  color: #94a3b8;
   padding: 10px 20px;
   border-radius: 6px;
   font-weight: 600;
   cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnCancel:hover {
+  background: #374151;
+  color: #f8fafc;
 }
 
 .btnAdd {
-  background: #3b82f6;
+  background: #00d1ff;
+  color: #0f172a; /* Texto oscuro sobre botón neón */
+  font-weight: 700;
   border: none;
-  color: #ffffff;
   padding: 10px 24px;
   border-radius: 6px;
-  font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+  transition: all 0.2s;
 }
 
-.btnAdd:disabled { background: #cbd5e1; color: #94a3b8; cursor: not-allowed; box-shadow: none; }
+.btnAdd:hover:not(:disabled) {
+  background: #00b8e6;
+  transform: translateY(-1px);
+  box-shadow: 0 0 15px rgba(0, 209, 255, 0.4);
+}
+
+.btnAdd:disabled {
+  background: #334155;
+  color: #64748b;
+  cursor: not-allowed;
+}
 
 .placeholder {
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #3d5270;
+  color: #475569;
   text-align: center;
   font-style: italic;
 }
