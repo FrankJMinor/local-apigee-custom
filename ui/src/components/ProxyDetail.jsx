@@ -9,6 +9,7 @@ import {
   IconKVM, IconDiana, IconSet, IconCloud, IconLaptop,
   IconSave, IconCopy, IconDownload, IconTerminal, IconSettings
 } from './Icons';
+import { AddPolicyModal } from './AddPolicyModal';
 
 // Configuración global de Monaco para Apigee (Rhino/ES5)
 const APIGEE_JS_TYPES = `
@@ -970,6 +971,36 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     alert('Proxy actualizado en el emulador');
   };
 
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handleAddPolicyClick = () => {
+    setIsModalOpen(true);
+  };
+
+  const handleCreatePolicy = (policyData) => {
+    // Aquí recibes: { name, displayName, type }
+    console.log("Creando nueva política:", policyData);
+    
+    // 1. Crear el objeto para el fileTree
+    const newFile = {
+      name: policyData.name,
+      full_name: `${policyData.name}.xml`,
+      path: `policies/${policyData.name}.xml`,
+      type: policyData.type,
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+  <${policyData.type} async="false" continueOnError="false" enabled="true" name="${policyData.name}">
+      <DisplayName>${policyData.displayName}</DisplayName>
+      <Properties/>
+  </${policyData.type}>`
+    };
+
+    // 2. Aquí deberías actualizar tu estado de 'fileTree' o enviar al backend
+    // Por ahora, lo seleccionamos para verlo en el editor inmediatamente
+    handleSelectFile(newFile, true);
+    
+    setIsModalOpen(false);
+  };
+
   const renderFolderHeader = (key, label, onAddClick) => (
       <div className={styles.treeFolder} onClick={() => toggle(key)}>
         {expanded[key] ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
@@ -1056,9 +1087,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             )}
 
             {/* Policies Section */}
-            {renderFolderHeader('policies', 'Policies', () => {
-                  console.log("Abrir diálogo de nueva política");
-                })}
+            {renderFolderHeader('policies', 'Policies', handleAddPolicyClick)}
             {/* Solo renderizamos esta sección si el usuario la ha expandido */}
             {expanded.policies && (
               <div className={styles.treeSub}>
@@ -1256,8 +1285,16 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             <span>Properties</span>
           </button>
         )}
-      </div>
-    </div>
+      </div> {/* Cierre de styles.workspace */}
+
+      {/* UBICACIÓN CORRECTA DEL MODAL: Fuera del flujo del workspace */}
+      <AddPolicyModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        onAdd={handleCreatePolicy} 
+      />
+
+    </div> // Cierre final de styles.detailWrapper
   );
 }
 
