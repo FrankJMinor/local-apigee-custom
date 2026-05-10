@@ -10,6 +10,7 @@ import {
   IconSave, IconCopy, IconDownload, IconTerminal, IconSettings
 } from './Icons';
 import { AddPolicyModal } from './AddPolicyModal';
+import SpikeArrestSVG from '../../icons/SpikeArrest.svg';
 
 // Configuración global de Monaco para Apigee (Rhino/ES5)
 const APIGEE_JS_TYPES = `
@@ -105,7 +106,7 @@ const getFileIcon = (fileName, size = 14) => {
   return <span style={{ marginRight: '6px' }}>📄</span>;
 };
 
-const getPolicyIcon = (type, className) => {
+export const getPolicyIcon = (type, className) => {
   const t = type || "";
   // Eliminamos width/height/size fijos para control total por CSS (.trackIcon)
   const iconStyle = { filter: 'url(#neonGlowIcon)' };
@@ -143,6 +144,7 @@ const getPolicyIcon = (type, className) => {
     case 'SpikeArrest': return <img src={SpikeArrestSVG} className={className} style={iconStyle} />;
     case 'Laptop': return <IconLaptop className={className} style={iconStyle} />;
     case 'Set': return <IconSet className={className} style={iconStyle} />;
+    case 'SpikeArrest': return <img src={SpikeArrestSVG} className={className} style={iconStyle} alt="SA" />;
     default: return <span className={className} style={{ ...iconStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>⚙️</span>;
   }
 };

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import styles from './AddPolicyModal.module.css';
 import { IconX } from './Icons';
+import { getPolicyIcon } from './ProxyDetail';
 
 const POLICY_CATALOG = [
   {
@@ -8,7 +9,12 @@ const POLICY_CATALOG = [
     policies: [
       { name: 'Quota', type: 'Quota', description: 'Control consumption limits on API clients.' },
       { name: 'Spike Arrest', type: 'SpikeArrest', description: 'Protect against sudden traffic surges.' },
-      { name: 'Response Cache', type: 'ResponseCache', description: 'Improve performance by caching backend data.' }
+      { name: 'Concurrent Rate Limit', type: 'ConcurrentRateLimit', description: 'Limit concurrent requests to backend services.' },
+      { name: 'Response Cache', type: 'ResponseCache', description: 'Improve performance by caching backend data.' },
+      { name: 'Lookup Cache', type: 'LookupCache', description: 'Cache data for quick retrieval during request processing.' },
+      { name: 'Populate Cache', type: 'PopulateCache', description: 'Store data in cache for use in subsequent requests.' },
+      { name: 'Invalidate Cache', type: 'InvalidateCache', description: 'Remove specific entries from cache based on request data.' },
+      { name: 'Reset Quota', type: 'ResetQuota', description: 'Reset quota counters for API clients.' }
     ]
   },
   {
@@ -84,21 +90,25 @@ export const AddPolicyModal = ({ isOpen, onClose, onAdd }) => {
               />
             </div>
             <div className={styles.categoryList}>
-              {filteredCatalog.map(group => (
-                <div key={group.category}>
-                  <div className={styles.groupLabel}>{group.category}</div>
-                  {group.policies.map(p => (
-                    <div 
-                      key={p.name} 
-                      className={`${styles.policyItem} ${selectedType?.name === p.name ? styles.active : ''}`}
-                      onClick={() => handleSelect(p)}
-                    >
-                      {p.name}
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
+                {filteredCatalog.map(group => (
+                  <div key={group.category}>
+                    <div className={styles.groupLabel}>{group.category}</div>
+                    {group.policies.map(p => (
+                      <div 
+                        key={p.name} 
+                        className={`${styles.policyItem} ${selectedType?.name === p.name ? styles.active : ''}`}
+                        onClick={() => handleSelect(p)}
+                      >
+                        <span className={styles.policyIconWrapper}>
+                          {/* Usamos la lógica de iconos existente */}
+                          {getPolicyIcon(p.type, styles.modalPolicyIcon)}
+                        </span>
+                        <span className={styles.policyNameText}>{p.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
           </aside>
 
           <main className={styles.formArea}>
