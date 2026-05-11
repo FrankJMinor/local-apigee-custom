@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<GenerateJWS name="JWS-">
+  <DisplayName>JWS-</DisplayName>
+  <Algorithm>HS256</Algorithm>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <CriticalHeaders/>
+  <SecretKey>
+    <Value ref="private.secretkey"/>
+  </SecretKey>
+  <Payload ref="variable_holding_payload"/>
+  <DetachContent>true</DetachContent>
+  <AdditionalHeaders>
+    <Claim name="issuedby">issuedby_variable</Claim>
+  </AdditionalHeaders>
+  <OutputVariable>jws_variable</OutputVariable>
+</GenerateJWS>

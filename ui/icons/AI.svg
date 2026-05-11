@@ -1,0 +1,16 @@
+<svg width="150" height="150" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="neon-glow-sparkle" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1.2" result="blur" />
+      <feFlood flood-color="#bd93f9" result="color" />
+      <feComposite in="color" in2="blur" operator="in" result="glow" />
+      <feMerge>
+        <feMergeNode in="glow" />
+        <feMergeNode in="glow" /> <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+  <path d="M12 2C12 2 13.5 9.5 22 12C22 12 13.5 14.5 12 22C12 22 10.5 14.5 2 12C2 12 10.5 9.5 12 2Z" 
+        fill="#f8f9ff" 
+        filter="url(#neon-glow-sparkle)" />
+</svg>

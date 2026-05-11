@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<DeleteOAuthV2Info continueOnError="false" enabled="true" name="OAuthV2-D">
+  <DisplayName>OAuthV2-</DisplayName>
+  <Properties/>
+  <AccessToken ref="request.header.token"/>
+  <!--<AuthorizationCode ref="{flow.variable}"/>-->
+</DeleteOAuthV2Info>

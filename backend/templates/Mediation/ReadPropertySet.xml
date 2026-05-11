@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ReadPropertySet name="RPS-">
+  <DisplayName>RPS-</DisplayName>
+  <Read>
+    <Name ref="set-ref">property-set-name</Name>
+    <Key ref="key-ref">key-name</Key>
+    <AssignTo>var1</AssignTo>
+    <DefaultValue>default-value</DefaultValue>
+  </Read>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+</ReadPropertySet>

@@ -1,0 +1,18 @@
+<svg width="150" height="150" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="neon-glow-proxy" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1" result="blur" />
+      <feFlood flood-color="#8be9fd" result="color" />
+      <feComposite in="color" in2="blur" operator="in" result="glow" />
+      <feMerge>
+        <feMergeNode in="glow" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#neon-glow-proxy)">
+    <path d="M4 4H20V20H15V9H4V4Z" fill="#e1f5fe"/>
+    <path d="M4 11H13V20H8V16H4V11Z" fill="#e1f5fe"/>
+    <rect x="4" y="18" width="2" height="2" fill="#e1f5fe"/>
+  </g>
+</svg>

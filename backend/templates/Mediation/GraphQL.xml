@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<GraphQL name="GQL-">
+  <Source>request</Source>
+  <OperationType>query_mutation</OperationType>
+  <MaxDepth>4</MaxDepth>
+  <MaxCount>4</MaxCount>
+  <Action>parse_verify</Action>
+  <ResourceURL>graphql://%resourceURL%</ResourceURL>
+</GraphQL>

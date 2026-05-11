@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<PromptTokenLimit continueOnError="false" enabled="true" name="PTL-">
+  <DisplayName>PTL-</DisplayName>
+  <Properties/>
+  <UserPromptSource>{jsonPath('$.contents[-1].parts[-1].text',request.content,true)}</UserPromptSource>
+  <Identifier ref=""/>
+  <Rate ref="">[pm|ps]</Rate>
+  <UseEffectiveCount>[false|true]</UseEffectiveCount>
+</PromptTokenLimit>

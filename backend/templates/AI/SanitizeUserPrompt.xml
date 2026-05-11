@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<SanitizeUserPrompt async="false" continueOnError="false" enabled="true" name="SUP-">
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <DisplayName>SUP-</DisplayName>
+  <ModelArmor>
+    <TemplateName>projects/{project}/locations/{location}/templates/{template-name}</TemplateName>
+  </ModelArmor>
+  <UserPromptSource>{jsonPath('$.contents[-1].parts[-1].text',request.content,true)}</UserPromptSource>
+</SanitizeUserPrompt>

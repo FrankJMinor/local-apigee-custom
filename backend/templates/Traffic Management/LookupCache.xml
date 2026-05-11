@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<LookupCache continueOnError="false" enabled="true" name="LC-">
+  <DisplayName>LC-</DisplayName>
+  <CacheKey>
+    <Prefix/>
+    <KeyFragment ref=""/>
+  </CacheKey>
+  <CacheResource/>
+  <Scope>Exclusive</Scope>
+  <AssignTo>flowVar</AssignTo>
+</LookupCache>

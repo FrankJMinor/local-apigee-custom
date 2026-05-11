@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ParseDialogflowRequest continueOnError="false" enabled="true" name="PDFR-">
+  <DisplayName>PDFR-</DisplayName>
+  <VariablePrefix/>
+  <DialogflowVersion>CX</DialogflowVersion>
+</ParseDialogflowRequest>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<SetOAuthV2Info continueOnError="false" enabled="true" name="">
+  <DisplayName>OAuthV2-</DisplayName>
+  <AccessToken ref="request.queryparam.accessToken"/>
+  <Attributes/>
+</SetOAuthV2Info>

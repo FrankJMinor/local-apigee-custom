@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<MessageValidation continueOnError="false" enabled="true" name="MV-">
+  <DisplayName>MV-</DisplayName>
+  <Properties/>
+  <Element namespace="http://sample.com"> sampleObject</Element>
+  <SOAPMessage/>
+  <Source>request</Source>
+  <ResourceURL>xsd://Resource-1.xsd</ResourceURL>
+</MessageValidation>
+<!-- Este debe crear o en con un archivo .xsd si no existe la carpeta xsd la crea en Resources-->

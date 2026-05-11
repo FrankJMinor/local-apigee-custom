@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<HTTPModifier continueOnError="false" enabled="true" name="HTTPM-">
+  <DisplayName>HTTPM-</DisplayName>
+  <Properties/>
+  <Remove>
+    <Headers>
+      <Header name="h1"/>
+    </Headers>
+    <QueryParams>
+      <QueryParam name="q1"/>
+    </QueryParams>
+    <FormParams>
+      <FormParam name="f1"/>
+    </FormParams>
+  </Remove>
+  <Add>
+    <Headers/>
+    <QueryParams/>
+    <FormParams/>
+  </Add>
+  <Set>
+    <Headers/>
+    <QueryParams/>
+    <FormParams/>
+    <!-- <Verb>GET</Verb> -->
+    <Path/>
+  </Set>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <AssignTo createNew="false" transport="http" type="request"/>
+</HTTPModifier>

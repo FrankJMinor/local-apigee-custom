@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<PublishMessage continueOnError="false" enabled="true" name="PM-">
+  <DisplayName>PM-</DisplayName>
+  <Source>{request.queryparam.message}</Source>
+  <CloudPubSub>
+    <Topic>projects/{request.header.project}/topics/{request.header.topic}</Topic>
+  </CloudPubSub>
+</PublishMessage>

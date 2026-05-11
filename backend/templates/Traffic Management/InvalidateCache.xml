@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<InvalidateCache continueOnError="false" enabled="true" name="IC-">
+  <DisplayName>IC-</DisplayName>
+  <CacheKey>
+    <Prefix/>
+    <KeyFragment ref=""/>
+  </CacheKey>
+  <CacheResource/>
+  <Scope>Exclusive</Scope>
+  <CacheContext>
+    <APIProxyName/>
+    <ProxyName>default</ProxyName>
+    <TargetName>default</TargetName>
+  </CacheContext>
+  <PurgeChildEntries>false</PurgeChildEntries>
+</InvalidateCache>

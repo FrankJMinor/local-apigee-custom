@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<LLMTokenQuota continueOnError="false" enabled="true" name="LTQ-" type="calendar">
+  <DisplayName>LTQ-</DisplayName>
+  <Properties/>
+  <Allow count="2000" countRef="request.header.allowed_quota"/>
+  <Interval ref="request.header.quota_count">1</Interval>
+  <Distributed>false</Distributed>
+  <Synchronous>false</Synchronous>
+  <TimeUnit ref="request.header.quota_timeout">month</TimeUnit>
+  <StartTime>2013-08-21 10:00:00</StartTime>
+  <AsynchronousConfiguration>
+    <SyncIntervalInSeconds>20</SyncIntervalInSeconds>
+    <SyncMessageCount>5</SyncMessageCount>
+  </AsynchronousConfiguration>
+  <LLMTokenUsageSource>{jsonPath('$.usageMetadata.candidatesTokenCount',response.content,true)}</LLMTokenUsageSource>
+  <LLMModelSource>{jsonPath('$.model',response.content,true)}</LLMModelSource>
+</LLMTokenQuota>

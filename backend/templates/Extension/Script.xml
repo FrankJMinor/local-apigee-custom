@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Script continueOnError="false" enabled="true" name="SCR-">
+  <DisplayName>SCR-</DisplayName>
+  <Properties/>
+  <ResourceURL>py://Resource-1.py</ResourceURL>
+</Script>
+<!-- Este debe crear o en con un archivo .py si no existe la carpeta py la crea en Resources-->

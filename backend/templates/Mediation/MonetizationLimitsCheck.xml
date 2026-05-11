@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<MonetizationLimitsCheck enabled="true" continueOnError="false" name="MC-">
+  <DisplayName>MC-</DisplayName>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <FaultResponse>
+    <Set>
+      <Payload contentType="text/xml">
+                <error>
+                    <messages>
+                        <message>Is developer suspended or has usage been exceeded - {mint.limitscheck.isRequestBlocked} </message>
+                    </messages>
+                </error>
+            </Payload>
+      <StatusCode>403</StatusCode>
+      <ReasonPhrase>Forbidden</ReasonPhrase>
+    </Set>
+  </FaultResponse>
+</MonetizationLimitsCheck>

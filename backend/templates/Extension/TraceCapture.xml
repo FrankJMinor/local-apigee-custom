@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<TraceCapture continueOnError="false" enabled="true" name="TC-">
+  <DisplayName>TC-</DisplayName>
+  <Variables>
+    <Variable name="my-trace-var" ref="my.flow.var">default-value</Variable>
+  </Variables>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <ThrowExceptionOnLimit>false</ThrowExceptionOnLimit>
+</TraceCapture>

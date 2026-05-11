@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ExternalCallout continueOnError="false" enabled="true" name="EC-">
+  <DisplayName>EC-</DisplayName>
+  <GrpcConnection>
+    <Server name="example_server_name"/>
+  </GrpcConnection>
+  <TimeoutMs>5000</TimeoutMs>
+  <Configurations>
+    <Property name="with.request.content">true</Property>
+    <Property name="with.request.headers">true</Property>
+    <Property name="with.response.content">true</Property>
+    <Property name="with.response.headers">true</Property>
+    <FlowVariable>example.flow.variable</FlowVariable>
+    <FlowVariable>another.flow.variable</FlowVariable>
+  </Configurations>
+</ExternalCallout>

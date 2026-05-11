@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<SetDialogflowResponse continueOnError="false" enabled="true" name="SDFR-">
+  <DisplayName>SDFR-</DisplayName>
+  <DialogflowVersion>CX</DialogflowVersion>
+  <Source>message</Source>
+  <NaturalLanguageResponse>
+    <MergeBehavior>APPEND</MergeBehavior>
+    <Phrases>
+      <Phrase>
+        <JSONPath>{example}</JSONPath>
+      </Phrase>
+      <Phrase>
+        <Header name="name"/>
+      </Phrase>
+      <Phrase>
+        <Ref>example-variable</Ref>
+      </Phrase>
+      <Phrase>
+        <Value>example</Value>
+      </Phrase>
+    </Phrases>
+  </NaturalLanguageResponse>
+  <Parameters>
+    <Parameter>
+      <JSONPath>{example}</JSONPath>
+    </Parameter>
+    <Parameter>
+      <Header name="name"/>
+    </Parameter>
+    <Parameter>
+      <Ref>example-variable</Ref>
+    </Parameter>
+    <Parameter>
+      <Value>example</Value>
+    </Parameter>
+  </Parameters>
+</SetDialogflowResponse>

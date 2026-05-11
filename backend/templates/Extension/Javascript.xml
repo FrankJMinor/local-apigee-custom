@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Javascript continueOnError="false" enabled="true" timeLimit="200" name="JS-">
+  <DisplayName>JS-</DisplayName>
+  <Properties/>
+  <ResourceURL>jsc://Resource-1.js</ResourceURL>
+</Javascript>
+<!-- Este debe crear o en con un archivo .js si no existe la carpeta js la crea en Resources-->

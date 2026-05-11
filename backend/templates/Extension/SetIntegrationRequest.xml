@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<SetIntegrationRequest continueOnError="false" enabled="true" name="SIR-">
+  <DisplayName>SIR-</DisplayName>
+  <ProjectId ref="example.flow.variable">example-project-id</ProjectId>
+  <IntegrationRegion ref="system.region.name"/>
+  <IntegrationName ref="example.flow.variable">example-name</IntegrationName>
+  <ApiTrigger ref="example.flow.variable">api_trigger/example_trigger</ApiTrigger>
+  <ScheduleTime>2021-12-31T23:59:59Z</ScheduleTime>
+  <Parameters>
+    <Parameter name="stringExample" type="string" ref="example.flow.variable">stringValue</Parameter>
+    <Parameter name="doubleExample" type="double" ref="example.flow.variable">1.0</Parameter>
+    <Parameter name="jsonExample" type="json" ref="example.flow.variable">{}</Parameter>
+    <ParameterArray name="intArrayExample" type="integer" ref="example.flow.variable">
+      <Value ref="example.flow.variable">1</Value>
+      <Value ref="example.flow.variable"/>
+      <Value>3</Value>
+      <Value>4</Value>
+    </ParameterArray>
+    <ParameterArray name="booleanArrayExample" type="boolean" ref="example.flow.variable">
+      <Value ref="example.flow.variable">true</Value>
+      <Value ref="example.flow.variable">false</Value>
+    </ParameterArray>
+  </Parameters>
+  <Request>example.flow.variable</Request>
+</SetIntegrationRequest>

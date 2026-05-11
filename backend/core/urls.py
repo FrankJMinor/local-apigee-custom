@@ -25,6 +25,7 @@ from APIs.views import SharedFlowDeployedListView
 from APIs.views import ProxyFileListView
 from APIs.views import SharedFlowFileListView
 from APIs.views import ApigeeOrganizationApisView
+from APIs.views import ApigeePolicyMenuView
 
 
 urlpatterns = [
@@ -43,5 +44,8 @@ urlpatterns = [
     
     # Rutas para operaciones de archivos dentro de un shared flow específico
     path('v1/sharedflows/<str:shared_flow_name>/files', SharedFlowFileListView.as_view()),
+    
+    # Ruta para obtener el menú de políticas
+    path('v1/policies/menu', ApigeePolicyMenuView.as_view()),
     
 ]

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<MessageLogging continueOnError="false" enabled="true" name="ML-">
+  <DisplayName>ML-</DisplayName>
+  <Syslog>
+    <Message>Message.id = {request.header.id}</Message>
+    <Host>IP</Host>
+    <Port>556</Port>
+  </Syslog>
+</MessageLogging>

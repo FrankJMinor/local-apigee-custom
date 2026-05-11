@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<XSL continueOnError="false" enabled="true" name="XSL-">
+  <DisplayName>XSL-</DisplayName>
+  <Properties/>
+  <Source>request</Source>
+  <ResourceURL>xsl://Resource-1.xslt</ResourceURL>
+  <Parameters ignoreUnresolvedVariables="true"/>
+  <OutputVariable/>
+</XSL>
+<!-- Este debe crear o en con un archivo .xslt si no existe la carpeta xsl la crea en Resources-->

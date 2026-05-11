@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<VerifyJWS name="JWS-">
+  <DisplayName>JWS-</DisplayName>
+  <Algorithm>ES256</Algorithm>
+  <PublicKey>
+    <Value ref="public_key"/>
+  </PublicKey>
+  <Source>request.formparam.JWS</Source>
+  <DetachedContent/>
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <KnownHeaders/>
+  <IgnoreCriticalHeaders/>
+</VerifyJWS>

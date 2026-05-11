@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<OASValidation continueOnError="false" enabled="true" name="OAS-">
+  <DisplayName>OAS-</DisplayName>
+  <Properties/>
+  <Source>request</Source>
+  <OASResource>oas://Resource-1.yaml</OASResource>
+  <Options>
+    <ValidateMessageBody>true</ValidateMessageBody>
+  </Options>
+</OASValidation>
+<!-- Este debe crear o en con un archivo .yaml si no existe la carpeta oas la crea en Resources-->

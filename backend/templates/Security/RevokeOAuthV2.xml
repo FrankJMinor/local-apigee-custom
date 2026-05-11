@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<RevokeOAuthV2 continueOnError="false" enabled="true" name="OAuthV2-s">
+  <DisplayName>OAuthV2-</DisplayName>
+  <AppId ref="request.queryparam.app_id"/>
+  <EndUserId ref="request.queryparam.enduser_id"/>
+  <RevokeBeforeTimestamp ref="request.queryparam.revoke_before"/>
+  <Cascade>false</Cascade>
+</RevokeOAuthV2>

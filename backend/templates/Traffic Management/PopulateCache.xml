@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<PopulateCache continueOnError="false" enabled="true" name="PC-">
+  <DisplayName>PC-</DisplayName>
+  <CacheKey>
+    <Prefix/>
+    <KeyFragment ref=""/>
+  </CacheKey>
+  <CacheResource/>
+  <Scope>Exclusive</Scope>
+  <ExpirySettings>
+    <TimeoutInSeconds>3600</TimeoutInSeconds>
+  </ExpirySettings>
+  <Source>flowVar</Source>
+</PopulateCache>

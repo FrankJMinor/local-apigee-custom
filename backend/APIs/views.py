@@ -1,6 +1,6 @@
 from django.shortcuts import render
 
-
+# local imports
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -8,6 +8,9 @@ from .services import get_latest_revision_path
 from .services import get_list_shared_flows
 from .services import get_proxy_file_tree
 from .services import get_sharedflow_file_tree
+from .utility import ApigeeTemplateService
+
+# global libraries
 import os
 import socket
 import logging
@@ -225,3 +228,10 @@ class SharedFlowFileListView(APIView):
             "total_files": len(files),
             "files": files
         })
+        
+# Esta clase es para generar el menú de políticas basado en los snippets de VS Code, similar a lo que hace ApigeeTemplateService pero expuesto como API
+class ApigeePolicyMenuView(APIView):
+    def get(self, request):
+        service = ApigeeTemplateService()
+        data = service.generate_menu_json()
+        return Response(data)
