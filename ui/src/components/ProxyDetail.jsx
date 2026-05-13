@@ -514,6 +514,13 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   const [isVolatile, setIsVolatile] = useState(true);
   const [fileCache, setFileCache] = useState({}); // Cache para persistir cambios entre archivos
   const [isSaving, setIsSaving] = useState(false);
+  const [localFiles, setLocalFiles] = useState(fileTree?.policies || []);
+
+  useEffect(() => {
+    if (fileTree?.policies) {
+      setLocalFiles(fileTree.policies);
+    }
+  }, [fileTree?.policies]);
 
   // Extraer flujos de un XML de Endpoint
   const getFlowsFromXml = (xml) => {
@@ -753,7 +760,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
 
   const handleSelectPolicy = (policy) => {
     // Buscar el archivo correspondiente en el tree para cargar su contenido
-    const policyFile = fileTree?.policies?.find(f => f.name === policy.name);
+    const policyFile = localFiles?.find(f => f.name === policy.name);
     if (policyFile) {
       handleSelectFile(policyFile);
     }
@@ -817,7 +824,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             let sMatch;
             while ((sMatch = stepRegex.exec(sectionContent)) !== null) {
               const policyName = sMatch[1];
-              const policyInfo = fileTree?.policies?.find(p => p.name === policyName);
+              const policyInfo = localFiles?.find(p => p.name === policyName);
               steps.push({
                 name: policyName,
                 type: policyInfo?.type || 'Mediation',
@@ -981,41 +988,42 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
 
   const handleCreatePolicy = (selectedType, formData) => {
     try {
-      console.log("Recibiendo en ProxyDetail:", selectedType, formData);
-
       const policyName = formData.name;
       let xmlContent = selectedType.xml_template;
 
-      // 1. Validar que la plantilla XML exista
       if (!xmlContent) {
-        console.error("Error: La política seleccionada no tiene un xml_template");
+        console.error("No hay template para esta política");
         return;
       }
 
-      // 2. Reemplazar los valores por el nombre que escribió el usuario
+      // 1. Limpiar y asignar el nombre en el XML
+      // Reemplaza el atributo name y el contenido de DisplayName
       xmlContent = xmlContent.replace(/name="[^"]*"/, `name="${policyName}"`);
       xmlContent = xmlContent.replace(/<DisplayName>.*?<\/DisplayName>/, `<DisplayName>${policyName}</DisplayName>`);
 
-      // 3. Crear la estructura del archivo
+      // 2. Crear el objeto con la estructura que localFiles espera
       const newFile = {
-        name: `${policyName}.xml`,
-        type: 'policy',
+        name: policyName,
+        type: selectedType.name, // El tipo real de la política, ej. 'AssignMessage'
         content: xmlContent,
-        // path: `apiproxy/policies/${policyName}.xml` // Descomenta si tu sidebar requiere la ruta
+        // Usamos path relativo a la carpeta de políticas
+        path: `policies/${policyName}.xml` 
       };
 
-      // 4. ACTUALIZAR ESTADOS
-      // ¡OJO AQUÍ! Revisa que 'setFiles', 'setSelectedFile' y 'setIsModalOpen' 
-      // sean los nombres EXACTOS de tus hooks de estado (useState) en este componente.
+      // 3. ACTUALIZAR LOS ESTADOS (Usando los nombres reales de tu código)
+      // localFiles es el que usas para el Navigator
+      setLocalFiles(prev => [...prev, newFile]); 
       
-      setFiles(prevFiles => [...prevFiles, newFile]); 
-      setSelectedFile(newFile);                       
-      setIsModalOpen(false); // Cierra el modal
+      // handleSelectFile hace todo el trabajo de setear selectedFile, xmlCode, etc.
+      handleSelectFile(newFile); 
+      
+      // 4. Cerrar el modal
+      setIsModalOpen(false);
 
       console.log("¡Política agregada con éxito!");
 
     } catch (error) {
-      console.error("Ocurrió un error al intentar agregar la política:", error);
+      console.error("Error al agregar política:", error);
     }
   };
 
@@ -1109,8 +1117,8 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             {/* Solo renderizamos esta sección si el usuario la ha expandido */}
             {expanded.policies && (
               <div className={styles.treeSub}>
-                {Array.isArray(fileTree?.policies) && fileTree.policies.length > 0 ? (
-                  fileTree.policies.map(policy => (
+                {Array.isArray(localFiles) && localFiles.length > 0 ? (
+                  localFiles.map(policy => (
                     <div
                       key={policy.path}
                       className={`${styles.treeItem} ${selectedFile?.path === policy.path ? styles.activeTreeItem : ''}`}
