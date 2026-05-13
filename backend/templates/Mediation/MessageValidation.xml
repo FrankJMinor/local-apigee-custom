@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<MessageValidation continueOnError="false" enabled="true" name="MV-">
+<MessageValidation continueOnError="false" enabled="true" name="">
   <DisplayName>MV-</DisplayName>
   <Properties/>
   <Element namespace="http://sample.com"> sampleObject</Element>

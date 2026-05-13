@@ -979,28 +979,44 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     setIsModalOpen(true);
   };
 
-  const handleCreatePolicy = (policyData) => {
-    // Aquí recibes: { name, displayName, type }
-    console.log("Creando nueva política:", policyData);
-    
-    // 1. Crear el objeto para el fileTree
-    const newFile = {
-      name: policyData.name,
-      full_name: `${policyData.name}.xml`,
-      path: `policies/${policyData.name}.xml`,
-      type: policyData.type,
-      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-  <${policyData.type} async="false" continueOnError="false" enabled="true" name="${policyData.name}">
-      <DisplayName>${policyData.displayName}</DisplayName>
-      <Properties/>
-  </${policyData.type}>`
-    };
+  const handleCreatePolicy = (selectedType, formData) => {
+    try {
+      console.log("Recibiendo en ProxyDetail:", selectedType, formData);
 
-    // 2. Aquí deberías actualizar tu estado de 'fileTree' o enviar al backend
-    // Por ahora, lo seleccionamos para verlo en el editor inmediatamente
-    handleSelectFile(newFile, true);
-    
-    setIsModalOpen(false);
+      const policyName = formData.name;
+      let xmlContent = selectedType.xml_template;
+
+      // 1. Validar que la plantilla XML exista
+      if (!xmlContent) {
+        console.error("Error: La política seleccionada no tiene un xml_template");
+        return;
+      }
+
+      // 2. Reemplazar los valores por el nombre que escribió el usuario
+      xmlContent = xmlContent.replace(/name="[^"]*"/, `name="${policyName}"`);
+      xmlContent = xmlContent.replace(/<DisplayName>.*?<\/DisplayName>/, `<DisplayName>${policyName}</DisplayName>`);
+
+      // 3. Crear la estructura del archivo
+      const newFile = {
+        name: `${policyName}.xml`,
+        type: 'policy',
+        content: xmlContent,
+        // path: `apiproxy/policies/${policyName}.xml` // Descomenta si tu sidebar requiere la ruta
+      };
+
+      // 4. ACTUALIZAR ESTADOS
+      // ¡OJO AQUÍ! Revisa que 'setFiles', 'setSelectedFile' y 'setIsModalOpen' 
+      // sean los nombres EXACTOS de tus hooks de estado (useState) en este componente.
+      
+      setFiles(prevFiles => [...prevFiles, newFile]); 
+      setSelectedFile(newFile);                       
+      setIsModalOpen(false); // Cierra el modal
+
+      console.log("¡Política agregada con éxito!");
+
+    } catch (error) {
+      console.error("Ocurrió un error al intentar agregar la política:", error);
+    }
   };
 
   const renderFolderHeader = (key, label, onAddClick) => (

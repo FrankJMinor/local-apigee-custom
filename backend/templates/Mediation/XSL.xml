@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<XSL continueOnError="false" enabled="true" name="XSL-">
+<XSL continueOnError="false" enabled="true" name="">
   <DisplayName>XSL-</DisplayName>
   <Properties/>
   <Source>request</Source>

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<AccessEntity continueOnError="false" enabled="true" name="AE-">
+<AccessEntity continueOnError="false" enabled="true" name="">
   <DisplayName>AE-</DisplayName>
   <Properties/>
   <EntityIdentifier ref="exampleIdentifier"/>

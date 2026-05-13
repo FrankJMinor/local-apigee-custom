@@ -28,3 +28,35 @@ export function timeAgo(ts) {
   if (d < 30) return `hace ${d} día${d !== 1 ? 's' : ''}`
   return formatDate(ts)
 }
+
+export const getPolicyAcronym = (policyName) => {
+  if (!policyName) return '';
+
+  // 1. Mapa para políticas con prefijos convencionales específicos en Apigee
+  const specialCases = {
+    'JavaScript': 'JS-',
+    'Quota': 'QUOTA-',
+    'Key Value Map Operations': 'KVM-',
+    'JSON to XML': 'J2X-',
+    'XML to JSON': 'X2J-',
+    'OAuth v2.0': 'OAUTH-'
+  };
+
+  if (specialCases[policyName]) {
+    return specialCases[policyName];
+  }
+
+  // 2. Normalizar CamelCase a texto separado por espacios
+  // Esto convierte "AssignMessage" -> "Assign Message"
+  // Pero deja "Extract Variables" igual.
+  const normalizedName = policyName.replace(/([a-z])([A-Z])/g, '$1 $2');
+
+  // 3. Lógica general: Toma la primera letra de cada palabra
+  const acronym = normalizedName
+    .split(/[\s_-]+/) // Separamos por espacios, guiones o guiones bajos por si acaso
+    .filter(word => word.length > 0)
+    .map(word => word[0].toUpperCase())
+    .join('');
+
+  return `${acronym}-`;
+};

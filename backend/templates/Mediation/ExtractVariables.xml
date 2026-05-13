@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<ExtractVariables continueOnError="false" enabled="true" name="EV-">
+<ExtractVariables continueOnError="false" enabled="true" name="">
   <DisplayName>EV-</DisplayName>
   <Properties/>
   <URIPath name="name"/>
