@@ -364,6 +364,38 @@
   font-weight: 600;
 }
 
+.itemName {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deletePolicyBtn {
+  margin-left: auto;
+  opacity: 0;
+  transition: all 0.2s;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.treeItem:hover .deletePolicyBtn {
+  opacity: 1;
+}
+
+.deletePolicyBtn:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
 .itemDot {
   width: 6px;
   height: 6px;

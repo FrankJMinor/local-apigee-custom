@@ -1027,6 +1027,53 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     }
   };
 
+  const handleDeletePolicy = (policyName) => {
+    // Asegurar que usamos el nombre sin extensión para la regex
+    const cleanPolicyName = policyName.replace('.xml', '');
+
+    // 1 y 2. Eliminar de localFiles y limpiar default.xml si estuviese dentro
+    setLocalFiles(prev => {
+      return prev
+        .filter(file => file.name !== `${cleanPolicyName}.xml` && file.name !== cleanPolicyName)
+        .map(file => {
+          if (file.name === 'default.xml' || file.name === 'default') {
+            // Regex robusta: atrapa cualquier Step que contenga el Name de la política,
+            // incluyendo saltos de línea y otros tags internos (como Condition)
+            const stepRegex = new RegExp(`<Step>[\\s\\S]*?<Name>${cleanPolicyName}</Name>[\\s\\S]*?</Step>\\s*`, 'gi');
+            return { ...file, content: file.content.replace(stepRegex, '') };
+          }
+          return file;
+        });
+    });
+
+    // Limpieza de XML en fileCache (Crucial: tu código usa fileCache para renderizar y guardar Endpoints)
+    setFileCache(prevCache => {
+      const newCache = { ...prevCache };
+      Object.keys(newCache).forEach(path => {
+        if (path.endsWith('default.xml')) {
+          const stepRegex = new RegExp(`<Step>[\\s\\S]*?<Name>${cleanPolicyName}</Name>[\\s\\S]*?</Step>\\s*`, 'gi');
+          newCache[path] = newCache[path].replace(stepRegex, '');
+        }
+      });
+      // Si tenemos el default.xml abierto en el editor, refrescamos su estado
+      if (selectedFile && selectedFile.path.endsWith('default.xml')) {
+        setXmlCode(newCache[selectedFile.path]);
+      }
+      return newCache;
+    });
+
+    // Limpiar de los flujos visuales (drafts) por si la política estaba en el canvas
+    setRequestFlowDraft(prev => prev.filter(p => p.name !== cleanPolicyName));
+    setResponseFlowDraft(prev => prev.filter(p => p.name !== cleanPolicyName));
+
+    // 3. Limpiar estado del editor si la política borrada estaba seleccionada
+    if (selectedFile && (selectedFile.name === cleanPolicyName || selectedFile.name === `${cleanPolicyName}.xml`)) {
+      setSelectedFile(null);
+      setSelectedPolicy(null);
+      setXmlCode('');
+    }
+  };
+
   const renderFolderHeader = (key, label, onAddClick) => (
       <div className={styles.treeFolder} onClick={() => toggle(key)}>
         {expanded[key] ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
@@ -1128,7 +1175,21 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
                     >
                       <span className={styles.itemIcon}>
                         {getPolicyIcon(policy.type, styles.sidebarIcon, 14)}
-                      </span> {policy.name}
+                      </span> 
+                      <span className={styles.itemName}>{policy.name}</span>
+                      
+                      <button 
+                        className={styles.deletePolicyBtn}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if(window.confirm(`¿Borrar la política ${policy.name}?`)) {
+                            handleDeletePolicy(policy.name);
+                          }
+                        }}
+                        title="Delete Policy"
+                      >
+                        <IconX size={14} />
+                      </button>
                     </div>
                   ))
                 ) : (
