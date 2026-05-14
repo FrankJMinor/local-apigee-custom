@@ -708,6 +708,34 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     };
   }, [handleMouseMove, handleMouseUp]);
 
+  const handleUpdatePolicyName = (oldName, newName) => {
+    const oldPath = `policies/${oldName}.xml`;
+    const newPath = `policies/${newName}.xml`;
+
+    // 1. Actualizar Navigator (localFiles)
+    setLocalFiles(prev => prev.map(p => 
+      p.name === oldName ? { ...p, name: newName, path: newPath } : p
+    ));
+
+    // 2. Actualizar FileCache (Renombrar la clave)
+    setFileCache(prev => {
+      const newCache = { ...prev };
+      if (newCache[oldPath]) {
+        newCache[newPath] = newCache[oldPath];
+        delete newCache[oldPath];
+      }
+      return newCache;
+    });
+
+    // 3. Mantener Selección (Actualizar selectedPolicy y selectedFile)
+    if (selectedPolicy && selectedPolicy.name === oldName) {
+      setSelectedPolicy(prev => ({ ...prev, name: newName }));
+    }
+    if (selectedFile && selectedFile.path === oldPath) {
+      setSelectedFile(prev => ({ ...prev, name: newName, path: newPath, full_name: `${newName}.xml` }));
+    }
+  };
+
   const handleSelectFile = async (file, forcePin = false) => {
   // 1. Seteamos el archivo actual y el estado de la pestaña
   setSelectedFile(file);
@@ -1307,6 +1335,13 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
               <PolicyDetailView 
                 policy={selectedPolicy} 
                 xmlCode={xmlCode}
+                onUpdateXml={(newXml) => {
+                  setXmlCode(newXml);
+                  if (selectedFile) {
+                    setFileCache(prev => ({ ...prev, [selectedFile.path]: newXml }));
+                  }
+                }}
+                onUpdatePolicyName={handleUpdatePolicyName}
                 onClose={() => setSelectedPolicy(null)}
                 onSave={handleSave}
               />
