@@ -1,0 +1,183 @@
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  background: #111827;
+  width: 600px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  border: 1px solid #334155;
+}
+
+.header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #1f2937;
+}
+
+.headerTitleGroup h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.closeButton {
+  background: #374151;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  transition: all 0.2s;
+}
+
+.closeButton:hover {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  padding: 2rem;
+  background: #0f172a;
+}
+
+.formGroup {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: center;
+  margin-bottom: 1.2rem;
+}
+
+.formGroup label {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: right;
+  padding-right: 1rem;
+}
+
+.formGroup input, .formGroup select {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #ffffff;
+  padding: 10px;
+  border-radius: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.formGroup input:focus, .formGroup select:focus {
+  border-color: #00d1ff;
+  box-shadow: 0 0 0 2px rgba(0, 209, 255, 0.2);
+}
+
+.formGroup input:disabled, .formGroup select:disabled {
+  background: #0f172a;
+  color: #475569;
+  cursor: not-allowed;
+}
+
+.formGroupRadio {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: center;
+  margin-bottom: 1.2rem;
+}
+
+.formGroupRadio > label {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: right;
+  padding-right: 1rem;
+}
+
+.radioOptions {
+  display: flex;
+  gap: 15px;
+  color: #f8fafc;
+  font-size: 0.9rem;
+}
+
+.radioOptions label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.radioOptions input[type="radio"] {
+  accent-color: #00d1ff;
+  cursor: pointer;
+}
+
+.footer {
+  padding: 1.25rem 1.5rem;
+  border-top: 1px solid #334155;
+  background: #1f2937;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.btnCancel {
+  background: transparent;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnCancel:hover {
+  background: #374151;
+  color: #f8fafc;
+}
+
+.btnAdd {
+  background: #00d1ff;
+  color: #0f172a;
+  font-weight: 700;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnAdd:hover:not(:disabled) {
+  background: #00b8e6;
+  box-shadow: 0 0 15px rgba(0, 209, 255, 0.4);
+}
+
+.btnAdd:disabled {
+  background: #334155;
+  color: #64748b;
+  cursor: not-allowed;
+}

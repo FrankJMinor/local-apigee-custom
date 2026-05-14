@@ -10,6 +10,7 @@ import {
   IconSave, IconCopy, IconDownload, IconTerminal, IconSettings
 } from './Icons';
 import { AddPolicyModal } from './AddPolicyModal';
+import { AddFlowModal } from './AddFlowModal';
 import SpikeArrestSVG from '../../icons/SpikeArrest.svg';
 
 // Configuración global de Monaco para Apigee (Rhino/ES5)
@@ -341,7 +342,7 @@ PolicyInspector.propTypes = {
 };
 
 // ── SUB-COMPONENT: CodeEditor (Reemplaza a XmlEditor) ───────────────────────
-const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollapsed, onToggleCollapse, selectedFile, onSave, onPlay, isSaving, proxyName, onReset, isVolatile }) => {
+const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollapsed, onToggleCollapse, selectedFile, onSave, onPlay, isSaving, proxyName, onReset, isVolatile, onEditorMount }) => {
   const language = selectedFile?.full_name?.endsWith('.js') ? 'javascript' : 'xml';
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
@@ -353,6 +354,10 @@ const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollaps
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+
+    if (onEditorMount) {
+      onEditorMount(editor, monaco);
+    }
 
     // Escuchar cambios en los markers para contar errores
     monaco.editor.onDidChangeMarkers(([uri]) => {
@@ -531,18 +536,21 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     if (xml.includes('<PreFlow')) flows.push({ name: 'PreFlow', method: 'ALL' });
 
     // 2. Flows condicionales - Extraer nombre y método (si existe en Condition)
-    const flowRegex = /<Flow name="(.*?)">/gi;
+    // Buscamos dentro de la sección <Flows>...</Flows> si existe
+    const flowsSection = xml.match(/<Flows>([\s\S]*?)<\/Flows>/i);
+    const contentToSearch = flowsSection ? flowsSection[1] : xml;
+
+    const flowRegex = /<Flow name="(.*?)">([\s\S]*?)<\/Flow>/gi;
     let match;
-    while ((match = flowRegex.exec(xml)) !== null) {
+    while ((match = flowRegex.exec(contentToSearch)) !== null) {
       const flowName = match[1];
-      // Buscar el bloque de este flujo para encontrar el método
-      const blockRegex = new RegExp(`<Flow name="${flowName}">([\\s\\S]*?)<\\/Flow>`, 'i');
-      const blockMatch = xml.match(blockRegex);
+      const flowBody = match[2];
       let method = 'ALL';
 
-      if (blockMatch) {
-        const condition = blockMatch[1].match(/<Condition>[\s\S]*?request\.verb\s*=\s*"(.*?)"[\s\S]*?<\/Condition>/i);
-        if (condition) method = condition[1].toUpperCase();
+      // Regex mejorada para capturar el verbo HTTP en la condición
+      const verbMatch = flowBody.match(/request\.verb\s*=?=\s*["'](GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)["']/i);
+      if (verbMatch) {
+        method = verbMatch[1].toUpperCase();
       }
 
       flows.push({ name: flowName, method });
@@ -758,9 +766,10 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     setSelectedFlow(null);
   }
 
-  // 4. Carga de Contenido (Cache -> API)
-  // Declaramos 'initialContent' UNA SOLA VEZ
-  const initialContent = file.content !== undefined ? file.content : fileCache[file.path];
+  // 4. Carga de Contenido (Cache -> Original)
+  // Prioridad absoluta a fileCache para ver cambios no guardados
+  const cachedContent = fileCache[file.path];
+  const initialContent = cachedContent !== undefined ? cachedContent : file.content;
 
   if (initialContent !== undefined) {
     setXmlCode(initialContent);
@@ -769,7 +778,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     if (fileCache[file.path] === undefined) {
       setFileCache(prev => ({ ...prev, [file.path]: initialContent }));
     }
-    return; // Salimos si ya tenemos los datos
+    return;
   }
 
   // Fallback: Fetch desde el backend
@@ -795,18 +804,40 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
 
     setSelectedPolicy(policy);
 
-    // Sincronización Inteligente: Scroll al tag <Name> (si ya está cargado el XML)
-    if (editorRef.current) {
+    // Sincronización Inteligente con Monaco
+    if (editorRef.current && xmlCode) {
       const searchStr = `<Name>${policy.name}</Name>`;
-      const index = xmlCode.indexOf(searchStr);
-      if (index !== -1) {
+      const model = editorRef.current.getModel();
+      const matches = model.findMatches(searchStr);
+      
+      if (matches && matches.length > 0) {
+        const range = matches[0].range;
+        editorRef.current.revealRangeInCenter(range);
+        editorRef.current.setSelection(range);
         editorRef.current.focus();
-        editorRef.current.setSelectionRange(index, index + searchStr.length);
+      }
+    }
+  };
 
-        // Scroll aproximado
-        const linesBefore = xmlCode.substring(0, index).split('\n').length;
-        const lineHeight = 20; // Estimado
-        editorRef.current.scrollTop = (linesBefore - 3) * lineHeight;
+  const handleSelectFlow = (flow) => {
+    setSelectedFlow(flow);
+
+    // Sincronización Inteligente con Monaco para Flujos
+    if (editorRef.current && xmlCode) {
+      // Intentar buscar por etiqueta de apertura
+      let searchStr = `<Flow name="${flow.name}">`;
+      if (flow.name === 'PreFlow') searchStr = '<PreFlow';
+      if (flow.name === 'PostFlow') searchStr = '<PostFlow';
+      if (flow.name === 'PostClientFlow') searchStr = '<PostClientFlow';
+
+      const model = editorRef.current.getModel();
+      const matches = model.findMatches(searchStr);
+
+      if (matches && matches.length > 0) {
+        const range = matches[0].range;
+        editorRef.current.revealRangeInCenter(range);
+        editorRef.current.setSelection(range);
+        editorRef.current.focus();
       }
     }
   };
@@ -1009,9 +1040,70 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   };
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAddFlowModalOpen, setIsAddFlowModalOpen] = useState(false);
+  const [addFlowTarget, setAddFlowTarget] = useState(null);
 
   const handleAddPolicyClick = () => {
     setIsModalOpen(true);
+  };
+
+  const handleAddFlow = (xmlBlock) => {
+    // Buscar archivo al cual inyectar
+    let targetFile = null;
+    
+    if (selectedFile && 
+        ((addFlowTarget === 'proxy' && selectedFile.type === 'ProxyEndpoint') ||
+         (addFlowTarget === 'target' && selectedFile.type === 'TargetEndpoint'))) {
+      targetFile = selectedFile;
+    } else {
+      // Fallback a default.xml o el primero
+      if (addFlowTarget === 'proxy' && fileTree?.proxy_endpoints?.length > 0) {
+        targetFile = fileTree.proxy_endpoints.find(f => f.full_name === 'default.xml') || fileTree.proxy_endpoints[0];
+      } else if (addFlowTarget === 'target' && fileTree?.target_endpoints?.length > 0) {
+        targetFile = fileTree.target_endpoints.find(f => f.full_name === 'default.xml') || fileTree.target_endpoints[0];
+      }
+    }
+
+    if (!targetFile) {
+      alert("No se encontró un Endpoint válido para agregar el flujo.");
+      return;
+    }
+
+    const currentXml = fileCache[targetFile.path] || targetFile.content || "";
+    let updatedXml = currentXml;
+
+    // Buscar <Flows> ... </Flows> o <Flows/>
+    const flowsRegex = /(<Flows>)([\s\S]*?)(<\/Flows>)/i;
+    const selfClosingFlowsRegex = /<Flows\s*\/>/i;
+    
+    // Identar el bloque
+    const indentedXmlBlock = "        " + xmlBlock.split('\n').join('\n        ');
+
+    if (flowsRegex.test(currentXml)) {
+      updatedXml = currentXml.replace(flowsRegex, `$1$2\n${indentedXmlBlock}\n    $3`);
+    } else if (selfClosingFlowsRegex.test(currentXml)) {
+      updatedXml = currentXml.replace(selfClosingFlowsRegex, `<Flows>\n${indentedXmlBlock}\n    </Flows>`);
+    } else {
+      const newFlowsSection = `    <Flows>\n${indentedXmlBlock}\n    </Flows>\n`;
+      if (currentXml.match(/<PostFlow/i)) {
+        updatedXml = currentXml.replace(/(<PostFlow)/i, `${newFlowsSection}    $1`);
+      } else if (currentXml.match(/<\/ProxyEndpoint>/i)) {
+        updatedXml = currentXml.replace(/(<\/ProxyEndpoint>)/i, `${newFlowsSection}$1`);
+      } else if (currentXml.match(/<\/TargetEndpoint>/i)) {
+        updatedXml = currentXml.replace(/(<\/TargetEndpoint>)/i, `${newFlowsSection}$1`);
+      } else {
+        updatedXml += `\n${newFlowsSection}`;
+      }
+    }
+
+    setXmlCode(updatedXml);
+    setFileCache(prev => ({ ...prev, [targetFile.path]: updatedXml }));
+    
+    if (!selectedFile || selectedFile.path !== targetFile.path) {
+      handleSelectFile(targetFile, true);
+    }
+    
+    setIsAddFlowModalOpen(false);
   };
 
   const handleCreatePolicy = (selectedType, formData) => {
@@ -1228,7 +1320,8 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
 
             {/* Proxy Endpoints Section */}
             {renderFolderHeader('proxyEndpoints', 'Proxy Endpoints', () => {
-                  console.log("Abrir diálogo de nuevo endpoint de proxy");
+                  setIsAddFlowModalOpen(true);
+                  setAddFlowTarget('proxy');
                 })}
             {expanded.proxyEndpoints && (
               <div className={styles.treeSub}>
@@ -1243,11 +1336,11 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
                       </div>
                       {selectedFile?.path === endpoint.path && (
                         <div className={styles.treeSub}>
-                          {getFlowsFromXml(selectedFile.content || fileCache[selectedFile.path] || "").map(flow => (
+                          {getFlowsFromXml(fileCache[endpoint.path] || endpoint.content || "").map(flow => (
                             <div
                               key={flow.name}
                               className={`${styles.flowItem} ${selectedFlow?.name === flow.name ? styles.activeFlowItem : ''}`}
-                              onClick={() => setSelectedFlow(flow)}
+                              onClick={() => handleSelectFlow(flow)}
                             >
                               <span className={`${styles.methodBadge} ${styles['method' + flow.method]}`}>
                                 {flow.method}
@@ -1267,7 +1360,8 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
 
             {/* Target Endpoints Section */}
             {renderFolderHeader('targetEndpoints', 'Target Endpoints', () => {
-                  console.log("Abrir diálogo de nuevo endpoint de destino");
+                  setIsAddFlowModalOpen(true);
+                  setAddFlowTarget('target');
                 })}
             {expanded.targetEndpoints && (
               <div className={styles.treeSub}>
@@ -1282,11 +1376,11 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
                       </div>
                       {selectedFile?.path === target.path && (
                         <div className={styles.treeSub}>
-                          {getFlowsFromXml(selectedFile.content || fileCache[selectedFile.path] || "").map(flow => (
+                          {getFlowsFromXml(fileCache[target.path] || target.content || "").map(flow => (
                             <div
                               key={flow.name}
                               className={`${styles.flowItem} ${selectedFlow?.name === flow.name ? styles.activeFlowItem : ''}`}
-                              onClick={() => setSelectedFlow(flow)}
+                              onClick={() => handleSelectFlow(flow)}
                             >
                               <span className={`${styles.methodBadge} ${styles['method' + flow.method]}`}>
                                 {flow.method}
@@ -1382,6 +1476,9 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             proxyName={proxy.name}
             onReset={handleResetEditor} // <-- Añade esta línea
             isVolatile={isVolatile}
+            onEditorMount={(editor) => {
+              editorRef.current = editor;
+            }}
           />
         </div>
 
@@ -1414,6 +1511,11 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
         onAdd={handleCreatePolicy} 
+      />
+      <AddFlowModal 
+        isOpen={isAddFlowModalOpen} 
+        onClose={() => setIsAddFlowModalOpen(false)} 
+        onAdd={handleAddFlow} 
       />
 
     </div> // Cierre final de styles.detailWrapper
