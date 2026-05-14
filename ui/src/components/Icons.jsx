@@ -83,6 +83,9 @@ export function IconSet({ size }) {
     </Svg>
   )
 }
+export function IconPlus({ size }) {
+  return <Svg size={size}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></Svg>
+}
 export function IconCloud({ size }) {
   return <Svg size={size}><path d="M17.5 19c3.037 0 5.5-2.463 5.5-5.5 0-2.822-2.124-5.147-4.887-5.458C17.587 4.603 14.103 2 10 2 6.134 2 3 5.134 3 9c0 .034.001.068.002.102C1.267 10.12 0 11.916 0 14c0 3.037 2.463 5.5 5.5 5.5h12z"/></Svg>
 }

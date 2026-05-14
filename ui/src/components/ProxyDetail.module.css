@@ -251,7 +251,6 @@
 .treeFolder {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
   padding: 0.5rem 0.75rem;
   font-size: 0.85rem;
   font-weight: 600;
@@ -262,6 +261,24 @@
 
 .treeFolder:hover {
   background: var(--bg-row-hover);
+}
+
+.addBtnSmall {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.addBtnSmall:hover {
+  background: rgba(var(--accent-rgb, 59, 130, 246), 0.1);
+  color: var(--accent);
 }
 
 .folderIcon {

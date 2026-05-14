@@ -51,11 +51,23 @@ function ProxyDetailPage() {
       .finally(() => setLoading(false));
   }, [proxyName]);
 
+  const refreshFiles = () => {
+    fetch(`http://localhost:8446/v1/proxies/${proxyName}/files`)
+      .then(res => res.json())
+      .then(data => setFileTree(data.files))
+      .catch(e => console.error("Error refreshing files:", e));
+  };
+
   if (loading) return <div style={{ padding: 40 }}>Cargando datos del proxy...</div>;
   if (error) return <div style={{ padding: 40, color: '#ef4444' }}>Error: {error}</div>;
 
   return (
-    <ProxyDetail proxy={proxy} fileTree={fileTree} onClose={() => navigate('/proxies')} />
+    <ProxyDetail 
+      proxy={proxy} 
+      fileTree={fileTree} 
+      onClose={() => navigate('/proxies')} 
+      refreshFileTree={refreshFiles}
+    />
   );
 }
 

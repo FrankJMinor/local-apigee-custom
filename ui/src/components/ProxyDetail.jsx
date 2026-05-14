@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PolicyDetailView } from './PolicyDetailView';
+import AddResourceModal from './AddResourceModal';
 import PropTypes from 'prop-types';
 import Editor, { loader } from '@monaco-editor/react';
 import {
@@ -7,7 +8,8 @@ import {
   IconChevronRight, IconChevronDown, IconX, IconCheck,
   IconVerifyAPIKey, IconQuota, IconXMLJSON, IconSpikeArrest,
   IconKVM, IconDiana, IconSet, IconCloud, IconLaptop,
-  IconSave, IconCopy, IconDownload, IconTerminal, IconSettings
+  IconSave, IconCopy, IconDownload, IconTerminal, IconSettings,
+  IconPlus
 } from './Icons';
 import { AddPolicyModal } from './AddPolicyModal';
 import { AddFlowModal } from './AddFlowModal';
@@ -94,7 +96,8 @@ const getPolicyTypeClass = (name) => {
 };
 
 const getFileIcon = (fileName, size = 14) => {
-  if (fileName.endsWith('.js')) {
+  const name = fileName.toLowerCase();
+  if (name.endsWith('.js')) {
     return (
       <span style={{ 
         backgroundColor: '#f59e0b', color: '#000', padding: '1px 3px', 
@@ -102,6 +105,36 @@ const getFileIcon = (fileName, size = 14) => {
         marginRight: '6px', display: 'inline-flex', alignItems: 'center',
         justifyContent: 'center', width: '14px', height: '14px', lineHeight: '1'
       }}>JS</span>
+    );
+  }
+  if (name.endsWith('.py')) {
+    return (
+      <span style={{ 
+        backgroundColor: '#3b82f6', color: '#fff', padding: '1px 3px', 
+        borderRadius: '2px', fontSize: '9px', fontWeight: 'bold',
+        marginRight: '6px', display: 'inline-flex', alignItems: 'center',
+        justifyContent: 'center', width: '14px', height: '14px', lineHeight: '1'
+      }}>PY</span>
+    );
+  }
+  if (name.endsWith('.jar')) {
+    return (
+      <span style={{ 
+        backgroundColor: '#ef4444', color: '#fff', padding: '1px 3px', 
+        borderRadius: '2px', fontSize: '9px', fontWeight: 'bold',
+        marginRight: '6px', display: 'inline-flex', alignItems: 'center',
+        justifyContent: 'center', width: '14px', height: '14px', lineHeight: '1'
+      }}>JAR</span>
+    );
+  }
+  if (name.endsWith('.wsdl') || name.endsWith('.xsd') || name.endsWith('.xsl')) {
+    return (
+      <span style={{ 
+        backgroundColor: '#10b981', color: '#fff', padding: '1px 3px', 
+        borderRadius: '2px', fontSize: '9px', fontWeight: 'bold',
+        marginRight: '6px', display: 'inline-flex', alignItems: 'center',
+        justifyContent: 'center', width: '14px', height: '14px', lineHeight: '1'
+      }}>XML</span>
     );
   }
   return <span style={{ marginRight: '6px' }}>📄</span>;
@@ -506,7 +539,7 @@ CodeEditor.propTypes = {
 };
 
 // ── MAIN COMPONENT: ProxyDetail ──────────────────────────────────────────────
-function ProxyDetail({ proxy, fileTree, onClose }) {
+function ProxyDetail({ proxy, fileTree, onClose, refreshFileTree }) {
   const [activeTab, setActiveTab] = useState('Develop');
   const [footerHeight, setFooterHeight] = useState(280);
   const [navigatorWidth, setNavigatorWidth] = useState(260);
@@ -519,13 +552,42 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
   const [isVolatile, setIsVolatile] = useState(true);
   const [fileCache, setFileCache] = useState({}); // Cache para persistir cambios entre archivos
   const [isSaving, setIsSaving] = useState(false);
-  const [localFiles, setLocalFiles] = useState(fileTree?.policies || []);
+  const [isResourceModalOpen, setIsResourceModalOpen] = useState(false);
+  const [localFiles, setLocalFiles] = useState([]); // Archivos locales (políticas)
+  const [localScripts, setLocalScripts] = useState([]); // Archivos locales (scripts)
 
-  useEffect(() => {
-    if (fileTree?.policies) {
-      setLocalFiles(fileTree.policies);
+  const handleAddLocalResource = async (resourceData) => {
+    const { name, folder, content, file, source, type } = resourceData;
+    const path = `resources/${folder}/${name}`;
+
+    try {
+      let finalContent = content;
+      if (source === 'import' && file) {
+        finalContent = await file.text();
+      }
+
+      // 1. Crear el objeto de archivo virtual
+      const newFile = {
+        name: name, // Conservar extensión para iconos y visualización
+        full_name: name,
+        path: path,
+        content: finalContent || '',
+        type: type || 'Script'
+      };
+
+      // 2. Actualizar estados locales (Volátil)
+      setLocalScripts(prev => [...prev, newFile]);
+      setFileCache(prev => ({ ...prev, [path]: newFile.content }));
+
+      // 3. Abrir el nuevo archivo en el editor
+      handleSelectFile(newFile, true);
+      setIsAddResourceModalOpen(false);
+      
+      console.log("Recurso local agregado:", path);
+    } catch (e) {
+      alert(`Error: ${e.message}`);
     }
-  }, [fileTree?.policies]);
+  };
 
   // Extraer flujos de un XML de Endpoint
   const getFlowsFromXml = (xml) => {
@@ -586,6 +648,8 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
       traverse(fileTree.scripts);
 
       setFileCache(newCache);
+      setLocalFiles(fileTree.policies || []);
+      setLocalScripts(fileTree.scripts || []);
     }
   }, [fileTree]);
 
@@ -1039,12 +1103,13 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
     alert('Proxy actualizado en el emulador');
   };
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAddPolicyModalOpen, setIsAddPolicyModalOpen] = useState(false);
   const [isAddFlowModalOpen, setIsAddFlowModalOpen] = useState(false);
+  const [isAddResourceModalOpen, setIsAddResourceModalOpen] = useState(false);
   const [addFlowTarget, setAddFlowTarget] = useState(null);
 
   const handleAddPolicyClick = () => {
-    setIsModalOpen(true);
+    setIsAddPolicyModalOpen(true);
   };
 
   const handleAddFlow = (xmlBlock) => {
@@ -1138,7 +1203,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
       handleSelectFile(newFile); 
       
       // 4. Cerrar el modal
-      setIsModalOpen(false);
+      setIsAddPolicyModalOpen(false);
 
       console.log("¡Política agregada con éxito!");
 
@@ -1399,13 +1464,26 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             )}
 
             {/* Scripts Section */}
-            {renderFolderHeader('scripts', 'Scripts', () => {
-                  console.log("Abrir diálogo de nuevo script");
-                })}
+            <div className={styles.treeFolder} onClick={() => toggle('scripts')}>
+              <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                {expanded.scripts ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+                <span className={styles.folderIcon}>📁</span> Scripts
+              </div>
+              <button 
+                className={styles.addBtnSmall} 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsAddResourceModalOpen(true);
+                }}
+                title="Add Resource"
+              >
+                <IconPlus size={14} />
+              </button>
+            </div>
 
             {expanded.scripts && (
               <div className={styles.treeSub}>
-                {fileTree?.scripts?.map(script => (
+                {localScripts?.map(script => (
                   <div 
                     key={script.path}
                     className={`${styles.treeItem} ${selectedFile?.path === script.path ? styles.activeTreeItem : ''}`}
@@ -1504,12 +1582,16 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
             <span>Properties</span>
           </button>
         )}
-      </div> {/* Cierre de styles.workspace */}
+      </div>
 
-      {/* UBICACIÓN CORRECTA DEL MODAL: Fuera del flujo del workspace */}
+      <AddResourceModal 
+        open={isAddResourceModalOpen} 
+        onClose={() => setIsAddResourceModalOpen(false)} 
+        onAdd={handleAddLocalResource} 
+      />
       <AddPolicyModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
+        isOpen={isAddPolicyModalOpen} 
+        onClose={() => setIsAddPolicyModalOpen(false)} 
         onAdd={handleCreatePolicy} 
       />
       <AddFlowModal 
@@ -1517,8 +1599,7 @@ function ProxyDetail({ proxy, fileTree, onClose }) {
         onClose={() => setIsAddFlowModalOpen(false)} 
         onAdd={handleAddFlow} 
       />
-
-    </div> // Cierre final de styles.detailWrapper
+    </div>
   );
 }
 
@@ -1533,4 +1614,3 @@ ProxyDetail.propTypes = {
 };
 
 export default ProxyDetail;
-
