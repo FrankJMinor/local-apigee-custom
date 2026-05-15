@@ -500,7 +500,11 @@ const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollaps
             language={language}
             theme="vs-dark"
             value={code}
-            onChange={(val) => setCode(val)}
+            onChange={(val) => {
+              if (val !== code) {
+                setCode(val, selectedFile?.path);
+              }
+            }}
             onMount={handleEditorDidMount}
             options={{
               minimap: { enabled: false },
@@ -808,13 +812,13 @@ function ProxyDetail({ proxy, fileTree, onClose, refreshFileTree }) {
     }
   };
 
-  const handleSelectFile = async (file, forcePin = false) => {
+  const handleSelectFile = async (file, forcePin = false, initialContentOverride = null) => {
   // 1. Seteamos el archivo actual y el estado de la pestaña
   setSelectedFile(file);
   setIsVolatile(!forcePin);
 
   // 2. Lógica de Navegación (Políticas vs Flujo)
-  if (file.path && file.path.includes('policies/')) {
+  if (file.path && file.path.replace(/\\/g, '/').includes('policies/')) {
     setSelectedPolicy({ 
       name: file.name, 
       type: file.type || 'Mediation' 
@@ -824,14 +828,21 @@ function ProxyDetail({ proxy, fileTree, onClose, refreshFileTree }) {
   }
 
   // 3. Lógica de Flujos (Endpoints)
-  if (file.type === 'ProxyEndpoint' || file.type === 'TargetEndpoint') {
+  const isEndpoint = file.type === 'ProxyEndpoint' || file.type === 'TargetEndpoint' || 
+    (file.path && (file.path.replace(/\\/g, '/').includes('proxies/') || file.path.replace(/\\/g, '/').includes('targets/')));
+    
+  if (isEndpoint) {
     setSelectedFlow({ name: 'PreFlow', method: 'ALL' });
   } else {
     setSelectedFlow(null);
   }
 
-  // 4. Carga de Contenido (Cache -> Original)
-  // Prioridad absoluta a fileCache para ver cambios no guardados
+  // 4. Carga de Contenido (Override -> Cache -> Original)
+  if (initialContentOverride !== null) {
+    setXmlCode(initialContentOverride);
+    return;
+  }
+
   const cachedContent = fileCache[file.path];
   const initialContent = cachedContent !== undefined ? cachedContent : file.content;
 
@@ -912,7 +923,10 @@ function ProxyDetail({ proxy, fileTree, onClose, refreshFileTree }) {
 
   // Actualizar el draft cuando se selecciona un ProxyEndpoint o TargetEndpoint o cambia el flujo
   useEffect(() => {
-    if (selectedFile && (selectedFile.type === 'ProxyEndpoint' || selectedFile.type === 'TargetEndpoint')) {
+    const isEndpoint = selectedFile && (selectedFile.type === 'ProxyEndpoint' || selectedFile.type === 'TargetEndpoint' || 
+      (selectedFile.path && (selectedFile.path.replace(/\\/g, '/').includes('proxies/') || selectedFile.path.replace(/\\/g, '/').includes('targets/'))));
+
+    if (isEndpoint) {
       // Prioridad: Usar primero lo que está en caché (cambios locales), luego el contenido original
       const content = fileCache[selectedFile.path] || selectedFile.content || "";
 
@@ -1113,59 +1127,72 @@ function ProxyDetail({ proxy, fileTree, onClose, refreshFileTree }) {
   };
 
   const handleAddFlow = (xmlBlock) => {
-    // Buscar archivo al cual inyectar
+    // 1. DETERMINAR EL TARGET CORRECTO (Proxy o Target)
+    const isProxy = addFlowTarget === 'proxy';
+    const endpoints = isProxy ? fileTree?.proxy_endpoints : fileTree?.target_endpoints;
     let targetFile = null;
-    
-    if (selectedFile && 
-        ((addFlowTarget === 'proxy' && selectedFile.type === 'ProxyEndpoint') ||
-         (addFlowTarget === 'target' && selectedFile.type === 'TargetEndpoint'))) {
+
+    // Solo usar el archivo seleccionado si coincide estrictamente con el tipo de la sección donde se hizo clic
+    const isSelectedFileCorrectType = selectedFile && (
+      (isProxy && (selectedFile.type === 'ProxyEndpoint' || selectedFile.path.replace(/\\/g, '/').includes('proxies/'))) ||
+      (!isProxy && (selectedFile.type === 'TargetEndpoint' || selectedFile.path.replace(/\\/g, '/').includes('targets/')))
+    );
+
+    if (isSelectedFileCorrectType) {
       targetFile = selectedFile;
-    } else {
-      // Fallback a default.xml o el primero
-      if (addFlowTarget === 'proxy' && fileTree?.proxy_endpoints?.length > 0) {
-        targetFile = fileTree.proxy_endpoints.find(f => f.full_name === 'default.xml') || fileTree.proxy_endpoints[0];
-      } else if (addFlowTarget === 'target' && fileTree?.target_endpoints?.length > 0) {
-        targetFile = fileTree.target_endpoints.find(f => f.full_name === 'default.xml') || fileTree.target_endpoints[0];
-      }
+    } else if (endpoints?.length > 0) {
+      // Fallback: Buscar default.xml en el grupo correcto o el primero de la lista
+      targetFile = endpoints.find(f => f.full_name === 'default.xml') || endpoints[0];
     }
 
     if (!targetFile) {
-      alert("No se encontró un Endpoint válido para agregar el flujo.");
+      alert(`No se encontró un Endpoint de tipo ${addFlowTarget} para agregar el flujo.`);
       return;
     }
 
+    // 2. OBTENER EL XML MÁS RECIENTE (Prioridad Cache -> Original)
+    // Es vital usar el XML del archivo destino, no el 'xmlCode' que podría ser de otro archivo
     const currentXml = fileCache[targetFile.path] || targetFile.content || "";
     let updatedXml = currentXml;
 
-    // Buscar <Flows> ... </Flows> o <Flows/>
+    // Preparar el bloque con indentación estándar de Apigee (8 espacios para Flow)
+    const indentedXmlBlock = "        " + xmlBlock.trim().split('\n').join('\n        ');
+
+    // 3. INYECCIÓN INTELIGENTE (Preservar existentes)
     const flowsRegex = /(<Flows>)([\s\S]*?)(<\/Flows>)/i;
     const selfClosingFlowsRegex = /<Flows\s*\/>/i;
-    
-    // Identar el bloque
-    const indentedXmlBlock = "        " + xmlBlock.split('\n').join('\n        ');
 
     if (flowsRegex.test(currentXml)) {
+      // Concatenar al final de la lista existente ($2 es el contenido actual)
       updatedXml = currentXml.replace(flowsRegex, `$1$2\n${indentedXmlBlock}\n    $3`);
     } else if (selfClosingFlowsRegex.test(currentXml)) {
+      // Reemplazar etiqueta de autocierre por bloque abierto
       updatedXml = currentXml.replace(selfClosingFlowsRegex, `<Flows>\n${indentedXmlBlock}\n    </Flows>`);
     } else {
+      // Si no existe <Flows>, insertarlo antes de <PostFlow> o antes del cierre del endpoint
       const newFlowsSection = `    <Flows>\n${indentedXmlBlock}\n    </Flows>\n`;
       if (currentXml.match(/<PostFlow/i)) {
         updatedXml = currentXml.replace(/(<PostFlow)/i, `${newFlowsSection}    $1`);
-      } else if (currentXml.match(/<\/ProxyEndpoint>/i)) {
-        updatedXml = currentXml.replace(/(<\/ProxyEndpoint>)/i, `${newFlowsSection}$1`);
-      } else if (currentXml.match(/<\/TargetEndpoint>/i)) {
-        updatedXml = currentXml.replace(/(<\/TargetEndpoint>)/i, `${newFlowsSection}$1`);
       } else {
-        updatedXml += `\n${newFlowsSection}`;
+        const closeTag = isProxy ? '</ProxyEndpoint>' : '</TargetEndpoint>';
+        if (currentXml.includes(closeTag)) {
+          updatedXml = currentXml.replace(closeTag, `${newFlowsSection}${closeTag}`);
+        } else {
+          updatedXml += `\n${newFlowsSection}`;
+        }
       }
     }
 
-    setXmlCode(updatedXml);
+    // 4. ACTUALIZACIÓN ATÓMICA DE CACHE Y EDITOR
+    // Primero actualizamos la caché global para que cualquier render vea el XML nuevo
     setFileCache(prev => ({ ...prev, [targetFile.path]: updatedXml }));
     
-    if (!selectedFile || selectedFile.path !== targetFile.path) {
-      handleSelectFile(targetFile, true);
+    // Si el archivo donde inyectamos es el que está abierto, solo actualizamos el código
+    if (selectedFile && selectedFile.path === targetFile.path) {
+      setXmlCode(updatedXml);
+    } else {
+      // Si es otro, forzamos el cambio de archivo y pasamos el contenido nuevo para evitar carreras
+      handleSelectFile(targetFile, true, updatedXml);
     }
     
     setIsAddFlowModalOpen(false);
@@ -1533,10 +1560,10 @@ function ProxyDetail({ proxy, fileTree, onClose, refreshFileTree }) {
           {/* El editor ahora tendrá su espacio garantizado abajo */}
           <CodeEditor 
             code={xmlCode} 
-            setCode={(newVal) => {
+            setCode={(newVal, originPath) => {
               setXmlCode(newVal);
-              if (selectedFile) {
-                setFileCache(prev => ({ ...prev, [selectedFile.path]: newVal }));
+              if (originPath) {
+                setFileCache(prev => ({ ...prev, [originPath]: newVal }));
               }
             }} 
             footerHeight={footerHeight}
