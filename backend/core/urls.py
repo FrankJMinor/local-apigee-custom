@@ -15,8 +15,13 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
-# core/urls.py
-# IMPORTANTE: Importamos desde 'api.views' (ruta absoluta), no desde '.'
+from django.contrib import admin
+from django.urls import path
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularSwaggerView,
+)
+
 from APIs.views import (
     ApigeeOrganizationApisView,
     ApigeePolicyMenuView,
@@ -25,27 +30,22 @@ from APIs.views import (
     SharedFlowDeployedListView,
     SharedFlowFileListView,
 )
-from django.contrib import admin
-from django.urls import path
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    
-    path('v1/organizations/<str:org>/apis', ApigeeOrganizationApisView.as_view()),
-    
+    path("admin/", admin.site.urls),
+    path("v1/organizations/<str:org>/apis", ApigeeOrganizationApisView.as_view()),
     # Ruta para listar proxies desplegados (sin detalles de archivos)
-    path('v1/proxies/deployed', ProxyDeployedListView.as_view()),
-    
+    path("v1/proxies/deployed", ProxyDeployedListView.as_view()),
     # Rutas para operaciones de archivos dentro de un proxy específico
-    path('v1/proxies/<str:proxy_name>/files', ProxyFileListView.as_view()),
-    
+    path("v1/proxies/<str:proxy_name>/files", ProxyFileListView.as_view()),
     # Ruta para listar shared flows desplegados (sin detalles de archivos)
-    path('v1/sharedflows/deployed', SharedFlowDeployedListView.as_view()),
-    
+    path("v1/sharedflows/deployed", SharedFlowDeployedListView.as_view()),
     # Rutas para operaciones de archivos dentro de un shared flow específico
-    path('v1/sharedflows/<str:shared_flow_name>/files', SharedFlowFileListView.as_view()),
-    
+    path("v1/sharedflows/<str:shared_flow_name>/files", SharedFlowFileListView.as_view()),
     # Ruta para obtener el menú de políticas
-    path('v1/policies/menu', ApigeePolicyMenuView.as_view()),
-    
+    path("v1/policies/menu", ApigeePolicyMenuView.as_view()),
+    # 2. Las rutas de la documentación
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    # Levanta la interfaz interactiva (Swagger) en tu navegador
+    path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
 ]

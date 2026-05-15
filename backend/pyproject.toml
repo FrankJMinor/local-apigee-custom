@@ -9,11 +9,16 @@ dependencies = [
     "django-cors-headers",
     "ruff",
     "pre-commit",
+    "drf-spectacular",
 ]
 
 [tool.ruff]
 line-length = 100
-select = ["E", "F", "I"]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I"]
+ignore = ["E501"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "core.settings"

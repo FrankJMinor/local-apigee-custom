@@ -1,6 +1,6 @@
 djangorestframework
 django-cors-headers
 django
-flask
 ruff
 pre-commit
+drf-spectacular
