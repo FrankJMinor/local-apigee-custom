@@ -1,16 +1,14 @@
-# Usamos una imagen ligera de Python
-FROM python:3.11-slim
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
-
-# 1. Instalamos dependencias reales desde tu archivo
-COPY requirements.txt .
+RUN pip install --upgrade pip
+COPY pyproject.toml requirements.txt* ./
 RUN pip install --no-cache-dir -r requirements.txt
-
-# 2. CLAVE: Copiamos TODO el contenido de la carpeta backend al contenedor
 COPY . .
+RUN ruff check .
 
 EXPOSE 8446
-
-# 3. Ahora manage.py sí existirá en /app/manage.py
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8446"]

@@ -1,0 +1,19 @@
+[project]
+name = "local-apigee-custom"
+version = "1.0.0"
+description = "backend simulator"
+
+dependencies = [
+    "django>=5.0",
+    "djangorestframework",
+    "django-cors-headers",
+    "ruff",
+    "pre-commit",
+]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "core.settings"

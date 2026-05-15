@@ -16,17 +16,17 @@ Including another URLconf
 """
 
 # core/urls.py
+# IMPORTANTE: Importamos desde 'api.views' (ruta absoluta), no desde '.'
+from APIs.views import (
+    ApigeeOrganizationApisView,
+    ApigeePolicyMenuView,
+    ProxyDeployedListView,
+    ProxyFileListView,
+    SharedFlowDeployedListView,
+    SharedFlowFileListView,
+)
 from django.contrib import admin
 from django.urls import path
-
-# IMPORTANTE: Importamos desde 'api.views' (ruta absoluta), no desde '.'
-from APIs.views import ProxyDeployedListView
-from APIs.views import SharedFlowDeployedListView
-from APIs.views import ProxyFileListView
-from APIs.views import SharedFlowFileListView
-from APIs.views import ApigeeOrganizationApisView
-from APIs.views import ApigeePolicyMenuView
-
 
 urlpatterns = [
     path('admin/', admin.site.urls),

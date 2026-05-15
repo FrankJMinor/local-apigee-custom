@@ -1,4 +1,3 @@
-from django.shortcuts import render
 
 # local imports
 from rest_framework.views import APIView
