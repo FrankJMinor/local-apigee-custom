@@ -7,10 +7,13 @@ import {
     IconChevronRight, IconChevronDown, IconX, IconCheck,
     IconVerifyAPIKey, IconQuota, IconXMLJSON, IconSpikeArrest,
     IconKVM, IconDiana, IconSet, IconCloud, IconLaptop,
-    IconSave, IconCopy, IconDownload, IconTerminal, IconSettings
+    IconSave, IconCopy, IconDownload, IconTerminal, IconSettings,
+    IconPlus
 } from '../components/Icons';
-
-// Importación de iconos específicos para políticas
+import { AddFlowModal } from '../components/AddFlowModal';
+import { AddPolicyModal } from '../components/AddPolicyModal';
+import AddResourceModal from '../components/AddResourceModal';
+import SpikeArrestSVG from '../../icons/SpikeArrest.svg';
 import AssignMessageSVG from '../../icons/AssignMessage.svg';
 import CloudSVG from '../../icons/Cloud.svg';
 import ExtractVariablesSVG from '../../icons/ExtractVariables.svg';
@@ -87,6 +90,7 @@ const getPolicyIcon = (type, className, size = 24) => {
         case 'KeyValueMapOperations': case 'KVM': return <img src={KeyValueMapOperationsSVG} className={className} style={iconStyle} />;
         case 'RaiseFault': return <img src={RaiseFaultSVG} className={className} style={iconStyle} />;
         case 'SpikeArrest': return <img src={SpikeArrestSVG} className={className} style={iconStyle} />;
+        case 'SpikeArrest': return <img src={SpikeArrestSVG} className={className} style={iconStyle} alt="SA" />;
         case 'Laptop': return <IconLaptop size={size} className={className} />;
         case 'Set': return <IconSet size={size} className={className} />;
         default: return <span style={{ fontSize: size === 14 ? '12px' : '18px', marginRight: '6px' }}>⚙️</span>;
@@ -223,7 +227,7 @@ const PolicyInspector = ({ policy, isOpen, onClose }) => {
 };
 
 // ── SUB-COMPONENT: CodeEditor ──────────────────────────────────────────────
-const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollapsed, onToggleCollapse, selectedFile, onSave, onPlay, isSaving }) => {
+const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollapsed, onToggleCollapse, selectedFile, onSave, onPlay, isSaving, isVolatile, onEditorMount, onReset }) => {
     const language = selectedFile?.full_name?.endsWith('.js') ? 'javascript' : 'xml';
     const editorRef = useRef(null);
     const monacoRef = useRef(null);
@@ -235,6 +239,11 @@ const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollaps
     const handleEditorDidMount = (editor, monaco) => {
         editorRef.current = editor;
         monacoRef.current = monaco;
+
+        if (onEditorMount) {
+            onEditorMount(editor, monaco);
+        }
+
         monaco.editor.onDidChangeMarkers(([uri]) => {
             const markers = monaco.editor.getModelMarkers({ resource: uri });
             setErrorCount(markers.filter(m => m.severity === 8).length);
@@ -251,17 +260,38 @@ const CodeEditor = ({ code, setCode, footerHeight, onResizerMouseDown, isCollaps
                 </div>
             )}
             <div className={styles.codeHeader}>
-                <div className={styles.codeTabs}><div className={`${styles.codeTab} ${styles.activeCodeTab}`}>{selectedFile?.full_name?.endsWith('.js') ? 'JS' : 'XML'} {selectedFile?.full_name || 'config.xml'}{isModified && <span className={styles.unsavedDot} />}</div></div>
+                <div className={styles.codeTabs}>
+                    <div className={`${styles.codeTab} ${styles.activeCodeTab}`}>
+                        <span style={{ 
+                            fontStyle: isVolatile ? 'italic' : 'normal', 
+                            opacity: isVolatile ? 0.8 : 1 
+                        }}>
+                            {selectedFile?.full_name || 'config.xml'}
+                        </span>
+                    </div>
+                </div>
                 <div className={styles.codeActions}>
                     <button className={styles.iconAction} onClick={onPlay} title="Deploy"><IconRocket size={16} color="#10b981" /></button>
                     <button className={styles.iconAction} onClick={onSave} disabled={isSaving} title="Save"><IconSave size={15} /></button>
-                    <button className={styles.iconAction} title="Refresh"><IconRefresh size={15} /></button>
+                    <button className={styles.iconAction} onClick={onReset} title="Refresh"><IconRefresh size={15} /></button>
                     <div className={styles.actionDivider} /><button className={styles.iconAction} title="Copy"><IconCopy size={15} /></button><button className={styles.iconAction} title="Download"><IconDownload size={15} /></button>
                 </div>
             </div>
             {!isCollapsed && (
                 <div className={styles.codeViewport} style={{ padding: 0, overflow: 'hidden' }}>
-                    <Editor height="100%" language={language} theme="vs-dark" value={code} onChange={(val) => setCode(val)} onMount={handleEditorDidMount} options={{ minimap: { enabled: false }, fontSize: 13, automaticLayout: true, wordWrap: 'on' }} />
+                    <Editor 
+                        height="100%" 
+                        language={language} 
+                        theme="vs-dark" 
+                        value={code} 
+                        onChange={(val) => {
+                            if (val !== code) {
+                                setCode(val, selectedFile?.path);
+                            }
+                        }} 
+                        onMount={handleEditorDidMount} 
+                        options={{ minimap: { enabled: false }, fontSize: 13, automaticLayout: true, wordWrap: 'on' }} 
+                    />
                 </div>
             )}
         </footer>
@@ -288,6 +318,17 @@ function SharedFlowDetailPage() {
     const [fileCache, setFileCache] = useState({});
     const [isSaving, setIsSaving] = useState(false);
     const [flowStepsDraft, setFlowStepsDraft] = useState([]);
+
+
+    // --- ESTADOS PARA MODALES Y VOLATILIDAD ---
+    const [isAddPolicyModalOpen, setIsAddPolicyModalOpen] = useState(false);
+    const [isAddResourceModalOpen, setIsAddResourceModalOpen] = useState(false);
+    const [isAddFlowModalOpen, setIsAddFlowModalOpen] = useState(false); 
+
+    const [localFiles, setLocalFiles] = useState([]); // Políticas
+    const [localScripts, setLocalScripts] = useState([]); // Scripts
+    const [localSharedFlows, setLocalSharedFlows] = useState([]); // Archivos de Shared Flow
+    const [isVolatile, setIsVolatile] = useState(true);
 
     const [expanded, setExpanded] = useState({ policies: true, sharedFlows: true, flow: true, scripts: false });
     const [inspectorTop, setInspectorTop] = useState(null);
@@ -361,12 +402,19 @@ function SharedFlowDetailPage() {
 
     useEffect(() => {
         if (fileTree) {
+            setLocalFiles(fileTree.policies || []);
+            setLocalScripts(fileTree.scripts || []);
+            setLocalSharedFlows(fileTree.shared_flows || []);
+
             const newCache = {};
             const traverse = (files) => files?.forEach(f => { if (f.path) newCache[f.path] = f.content || ""; });
             if (fileTree.root_config) newCache[fileTree.root_config.path] = fileTree.root_config.content || "";
             traverse(fileTree.policies);
+            traverse(fileTree.shared_flows);
             traverse(fileTree.scripts);
-            setFileCache(newCache);
+            setFileCache(prev => ({ ...prev, ...newCache }));
+
+
         }
     }, [fileTree]);
 
@@ -404,12 +452,18 @@ function SharedFlowDetailPage() {
             let sMatch;
             while ((sMatch = stepRegex.exec(content)) !== null) {
                 const pName = sMatch[1];
-                const pInfo = fileTree?.policies?.find(p => p.name === pName);
-                steps.push({ name: pName, type: pInfo?.type || 'Mediation', id: `${pName}-${Math.random().toString(36).substr(2, 9)}` });
+                // BUSQUEDA CLAVE: Ahora localFiles es una dependencia, por lo que siempre encontrará el tipo
+                const pInfo = localFiles?.find(p => p.name === pName || p.name === `${pName}.xml`); 
+                steps.push({ 
+                    name: pName, 
+                    type: pInfo?.type || 'Mediation', // Si no lo encuentra, usa Mediation (engrane)
+                    id: `${pName}-${Math.random().toString(36).substr(2, 9)}` 
+                });
             }
             setFlowStepsDraft(steps);
         }
-    }, [selectedFile, fileCache, fileTree]);
+        // AGREGAR localFiles aquí es vital para que el icono cargue tras crear la política
+    }, [selectedFile, fileCache, fileTree, localFiles]);
 
     const handleSave = async () => {
         if (!selectedFile) return;
@@ -452,6 +506,135 @@ function SharedFlowDetailPage() {
         setXmlCode(updatedXml);
         setFileCache(prev => ({ ...prev, [selectedFile.path]: updatedXml }));
         setFlowStepsDraft(nextSteps);
+    };
+
+    const handleCreatePolicy = (selectedType, formData) => {
+        try {
+            const policyName = formData.name;
+            let xmlContent = selectedType.xml_template;
+
+            if (!xmlContent) return;
+
+            xmlContent = xmlContent.replace(/name="[^"]*"/, `name="${policyName}"`);
+            xmlContent = xmlContent.replace(/<DisplayName>.*?<\/DisplayName>/, `<DisplayName>${policyName}</DisplayName>`);
+
+            const newFile = {
+                name: policyName,
+                full_name: `${policyName}.xml`,
+                type: selectedType.name,
+                content: xmlContent,
+                path: `policies/${policyName}.xml`
+            };
+
+            setLocalFiles(prev => [...prev, newFile]);
+            setFileCache(prev => ({ ...prev, [newFile.path]: xmlContent }));
+            handleSelectFile(newFile);
+            setIsAddPolicyModalOpen(false);
+        } catch (error) {
+            console.error("Error adding policy:", error);
+        }
+    };
+
+    // --- HANDLER DE RECURSOS (SCRIPTS) VOLÁTILES ---
+    const handleAddLocalResource = async (resourceData) => {
+        const { name, folder, content, file, source, type } = resourceData;
+        const path = `resources/${folder}/${name}`;
+
+        try {
+            let finalContent = content;
+            if (source === 'import' && file) {
+                finalContent = await file.text();
+            }
+
+            const newFile = {
+                name,
+                full_name: name,
+                path,
+                content: finalContent || '',
+                type: type || 'Script'
+            };
+
+            // Actualizar estados locales (Volátil)
+            setLocalScripts(prev => [...prev, newFile]);
+            setFileCache(prev => ({ ...prev, [path]: newFile.content }));
+
+            // Abrir automáticamente en el editor
+            handleSelectFile(newFile, true); 
+            setIsAddResourceModalOpen(false);
+        } catch (e) {
+            alert(`Error: ${e.message}`);
+        }
+    };
+
+    const handleAddFlow = (xmlData) => {
+            // Extraemos el nombre del flujo del XML generado por el modal
+            const flowName = xmlData.match(/name="(.*?)"/)?.[1] || "NewSharedFlow";
+            const path = `sharedflows/${flowName}.xml`;
+
+            const sharedFlowXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <SharedFlow name="${flowName}">
+                    <Description/>
+                    <Step>
+                        <Name>Default-Policy</Name>
+                    </Step>
+                </SharedFlow>`;
+
+            const newFile = {
+                name: flowName,
+                full_name: `${flowName}.xml`,
+                path: path,
+                content: sharedFlowXml,
+                type: 'SharedFlow'
+            };
+
+            // Actualizamos el estado local para el Navigator y la caché
+            setLocalSharedFlows(prev => [...prev, newFile]);
+            setFileCache(prev => ({ ...prev, [path]: sharedFlowXml }));
+            
+            handleSelectFile(newFile, true);
+            setIsAddFlowModalOpen(false);
+        };
+
+    const handleDeletePolicy = (policyName) => {
+        const cleanName = policyName.replace('.xml', '');
+
+        // 1. Eliminar de localFiles y limpiar default.xml si estuviese dentro
+        setLocalFiles(prev => {
+            return prev
+                .filter(file => file.name !== `${cleanName}.xml` && file.name !== cleanName)
+                .map(file => {
+                    if (file.name === 'default.xml' || file.name === 'default') {
+                        const stepRegex = new RegExp(`<Step>[\\s\\S]*?<Name>${cleanName}</Name>[\\s\\S]*?</Step>\\s*`, 'gi');
+                        return { ...file, content: file.content.replace(stepRegex, '') };
+                    }
+                    return file;
+                });
+        });
+
+        // 2. Limpieza de XML en fileCache (Endpoints/SharedFlows)
+        setFileCache(prevCache => {
+            const newCache = { ...prevCache };
+            Object.keys(newCache).forEach(path => {
+                if (path.endsWith('default.xml')) {
+                    const stepRegex = new RegExp(`<Step>[\\s\\S]*?<Name>${cleanName}</Name>[\\s\\S]*?</Step>\\s*`, 'gi');
+                    newCache[path] = newCache[path].replace(stepRegex, '');
+                }
+            });
+            if (selectedFile && selectedFile.path.endsWith('default.xml')) {
+                setXmlCode(newCache[selectedFile.path]);
+            }
+            return newCache;
+        });
+
+        // 3. Limpiar de los flujos visuales
+        setFlowStepsDraft(prev => prev.filter(p => p.name !== cleanName));
+
+        // 4. Limpiar estado del editor
+        if (selectedFile && (selectedFile.name === cleanName || selectedFile.name === `${cleanName}.xml`)) {
+            setSelectedFile(null);
+            setSelectedPolicy(null);
+            setXmlCode('');
+        }
     };
 
     const handleNavResizeMouseDown = (e) => {
@@ -540,40 +723,92 @@ function SharedFlowDetailPage() {
                                 <span className={styles.itemIcon}>📄</span> {fileTree.root_config.full_name}
                             </div>
                         )}
-                        <div className={styles.treeFolder} onClick={() => toggle('policies')}>{expanded.policies ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}<span className={styles.folderIcon}>📁</span> Policies</div>
+                        <div className={styles.treeFolder} onClick={() => toggle('policies')}>
+                            <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                                {expanded.policies ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+                                <span className={styles.folderIcon}>📁</span> Policies
+                            </div>
+                            <button className={styles.addBtnSmall} onClick={(e) => { e.stopPropagation(); setIsAddPolicyModalOpen(true); }} title="Add Policy">
+                                <IconPlus size={14} />
+                            </button>
+                        </div>
                         {expanded.policies && (
                             <div className={styles.treeSub}>
-                                {fileTree?.policies?.map(policy => (
-                                    <div key={policy.path} className={`${styles.treeItem} ${selectedFile?.path === policy.path ? styles.activeTreeItem : ''}`} onClick={() => handleSelectFile(policy)} draggable onDragStart={(e) => { e.dataTransfer.setData('policyName', policy.name); e.dataTransfer.setData('policyType', policy.type); }}>
-                                        <span className={styles.itemIcon}>{getPolicyIcon(policy.type, styles.sidebarIcon, 14)}</span> {policy.name}
+                                {localFiles?.map(policy => (
+                                    <div 
+                                        key={policy.path} 
+                                        className={`${styles.treeItem} ${selectedFile?.path === policy.path ? styles.activeTreeItem : ''}`} 
+                                        onClick={() => handleSelectFile(policy)}
+                                        draggable 
+                                        onDragStart={(e) => { 
+                                            // Pasamos el tipo exacto para que getPolicyIcon sepa qué SVG usar
+                                            e.dataTransfer.setData('policyName', policy.name.replace('.xml', '')); 
+                                            e.dataTransfer.setData('policyType', policy.type); 
+                                        }}
+                                    >
+                                        <span className={styles.itemIcon}>
+                                            {/* Aquí usamos el tamaño 14 para el Navigator */}
+                                            {getPolicyIcon(policy.type, styles.sidebarIcon, 14)}
+                                        </span> 
+                                        <span className={styles.itemName}>{policy.name}</span>
+                                        {/* ... botón de eliminar ... */}
                                     </div>
                                 ))}
                             </div>
                         )}
 
                         {/* Folder para SharedFlows (ej. default.xml) */}
-                        {fileTree?.shared_flows?.length > 0 && (
-                            <>
-                                <div className={styles.treeFolder} onClick={() => toggle('sharedFlows')}>
-                                    {expanded.sharedFlows ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
-                                    <span className={styles.folderIcon}>📁</span> Shared Flows
-                                </div>
-                                {expanded.sharedFlows && (
-                                    <div className={styles.treeSub}>
-                                        {fileTree.shared_flows.map(sf => (
-                                            <div key={sf.path} className={`${styles.treeItem} ${selectedFile?.path === sf.path ? styles.activeTreeItem : ''}`} onClick={() => handleSelectFile(sf)}>
-                                                <span className={styles.itemIcon}>⚡</span> {sf.name}
-                                            </div>
-                                        ))}
+                        <div className={styles.treeFolder} onClick={() => toggle('sharedFlows')}>
+                            <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                                {expanded.sharedFlows ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+                                <span className={styles.folderIcon}>📁</span> Shared Flows
+                            </div>
+                        </div>
+
+                        {expanded.sharedFlows && (
+                            <div className={styles.treeSub}>
+                                {localSharedFlows?.map(sf => (
+                                    <div 
+                                        key={sf.path} 
+                                        className={`${styles.treeItem} ${selectedFile?.path === sf.path ? styles.activeTreeItem : ''}`} 
+                                        onClick={() => handleSelectFile(sf)}
+                                    >
+                                        <span className={styles.itemIcon}>⚡</span> {sf.name}
                                     </div>
-                                )}
-                            </>
+                                ))}
+                            </div>
                         )}
-                        <div className={styles.treeFolder} onClick={() => toggle('scripts')}>{expanded.scripts ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}<span className={styles.folderIcon}>📁</span> Scripts</div>
+                        <div className={styles.treeFolder} onClick={() => toggle('scripts')}>
+                            <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                                {expanded.scripts ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+                                <span className={styles.folderIcon}>📁</span> Scripts
+                            </div>
+                            <button className={styles.addBtnSmall} onClick={(e) => { e.stopPropagation(); setIsAddResourceModalOpen(true); }} title="Add Resource">
+                                <IconPlus size={14} />
+                            </button>
+                        </div>
                         {expanded.scripts && (
                             <div className={styles.treeSub}>
-                                {fileTree?.scripts?.map(script => (
-                                    <div key={script.path} className={`${styles.treeItem} ${selectedFile?.path === script.path ? styles.activeTreeItem : ''}`} onClick={() => handleSelectFile(script)}><span className={styles.itemIcon}>{getFileIcon(script.name)}</span>{script.name}</div>
+                                {localScripts?.map(script => (
+                                    <div 
+                                        key={script.path} 
+                                        className={`${styles.treeItem} ${selectedFile?.path === script.path ? styles.activeTreeItem : ''}`} 
+                                        onClick={() => handleSelectFile(script)}
+                                    >
+                                        <span className={styles.itemIcon}>{getFileIcon(script.name)}</span>
+                                        <span className={styles.itemName}>{script.name}</span>
+                                        <button 
+                                            className={styles.deletePolicyBtn}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if(window.confirm(`¿Borrar el recurso ${script.name}?`)) {
+                                                    setLocalScripts(prev => prev.filter(s => s.path !== script.path));
+                                                }
+                                            }}
+                                        >
+                                            <IconX size={14} />
+                                        </button>
+                                    </div>
                                 ))}
                             </div>
                         )}
@@ -583,7 +818,12 @@ function SharedFlowDetailPage() {
                     <VisualFlowCanvas selectedPolicy={selectedPolicy} onSelectPolicy={handleSelectPolicy} flowStepsDraft={flowStepsDraft} onDropPolicy={handleDropPolicy} onRemovePolicy={handleRemovePolicy} />
                     <CodeEditor
                         code={xmlCode}
-                        setCode={setXmlCode}
+                        setCode={(newVal) => {
+                            setXmlCode(newVal);
+                            if (selectedFile) {
+                                setFileCache(prev => ({ ...prev, [selectedFile.path]: newVal }));
+                            }
+                        }}
                         footerHeight={footerHeight}
                         isCollapsed={isEditorCollapsed}
                         onToggleCollapse={() => setIsEditorCollapsed(!isEditorCollapsed)}
@@ -603,6 +843,18 @@ function SharedFlowDetailPage() {
                     <button className={styles.inspectorToggle} onMouseDown={handleInspectorMouseDown} onClick={() => setIsInspectorOpen(true)} style={inspectorTop !== null ? { top: inspectorTop, transform: 'none' } : {}} title="Open Properties"><IconEdit size={14} /><span>Properties</span></button>
                 )}
             </div>
+
+            <AddPolicyModal 
+                isOpen={isAddPolicyModalOpen} 
+                onClose={() => setIsAddPolicyModalOpen(false)} 
+                onAdd={handleCreatePolicy} 
+            />
+            <AddResourceModal 
+                open={isAddResourceModalOpen} 
+                onClose={() => setIsAddResourceModalOpen(false)} 
+                onAdd={handleAddLocalResource} 
+            />
+
         </div>
     );
 }
