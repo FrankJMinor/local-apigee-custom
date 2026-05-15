@@ -1,20 +1,26 @@
-import React, { useState, useEffect } from 'react'; // <--- CORREGIDO: Se agregó useEffect
+import React, { useState, useEffect, useRef } from 'react';
 import styles from './AddPolicyModal.module.css';
 import { IconX } from './Icons';
 import { getPolicyIcon } from './ProxyDetail';
 import { fetchPolicyMenu } from '../utils/fetchPolicyMenu';
 import { getPolicyAcronym } from "../utils/format";
 
-// IMPORTA ASÍ PARA USAR EN <img src={...} />
-import AIIcon from '../../icons/AI.svg';         // <--- CORREGIDO: Sin ?react para obtener la URL
-import ExtensionIcon from '../../icons/Extension.svg'; // <--- CORREGIDO: Sin ?react
+import AIIcon from '../../icons/AI.svg';
+import ExtensionIcon from '../../icons/Extension.svg';
 
-export const AddPolicyModal = ({ isOpen, onClose, onAdd }) => {
+export const AddPolicyModal = ({ isOpen, onClose, onAdd, scripts = [] }) => {
 	const [catalog, setCatalog] = useState({});
 	const [selectedType, setSelectedType] = useState(null);
-	const [formData, setFormData] = useState({ displayName: '', name: '' });
+	const [formData, setFormData] = useState({ 
+		displayName: '', 
+		name: '', 
+		scriptFile: '', 
+		scriptAction: 'existing' 
+	});
 	const [searchTerm, setSearchTerm] = useState('');
 	const [loading, setLoading] = useState(true);
+	const [selectedImportedFile, setSelectedImportedFile] = useState(null);
+	const fileInputRef = useRef(null);
 
 	useEffect(() => {
 		if (isOpen) {
@@ -28,18 +34,28 @@ export const AddPolicyModal = ({ isOpen, onClose, onAdd }) => {
 
 	if (!isOpen) return null;
 
-	const handleSelect = (policy) => {
-			setSelectedType(policy);
-			
-			// 1. Generar el acrónimo basado en el nombre de la política seleccionada
-			const acronym = getPolicyAcronym(policy.name);
+	// FUNCIÓN CLAVE: Normaliza el nombre para el check
+	const isScript = (name) => {
+		const n = name?.toLowerCase() || "";
+		return n === 'javascript' || n === 'python';
+	};
 
-			// 2. Establecer el acrónimo como valor inicial en el estado del formulario
-			setFormData({
-				displayName: acronym, 
-				name: acronym 
-			});
-		};
+	const handleSelect = (policy) => {
+		setSelectedType(policy);
+		const acronym = getPolicyAcronym(policy.name);
+		
+		const scriptType = isScript(policy.name);
+		const extension = policy.name.toLowerCase() === 'javascript' ? '.js' : '.py';
+
+		setFormData({
+			displayName: acronym, 
+			name: acronym,
+			scriptAction: scriptType && scripts.length > 0 ? 'existing' : 'new',
+			scriptFile: scriptType && scripts.length > 0 ? scripts[0].name : `${acronym}${extension}`
+		});
+	};
+
+	const isScriptPolicy = isScript(selectedType?.name);
 
 	const filteredCatalog = Object.entries(catalog).reduce((acc, [category, policies]) => {
 		const filtered = policies.filter(p =>
@@ -94,7 +110,6 @@ export const AddPolicyModal = ({ isOpen, onClose, onAdd }) => {
 												onClick={() => handleSelect(p)}
 											>
 												<span className={styles.policyIconWrapper}>
-													{/* Lógica de Iconos usando <img> con la URL del asset */}
 													{p.type === 'AI' ? (
 														<img src={AIIcon} className={styles.modalPolicyIcon} alt="AI" />
 													) : p.type === 'Extension' ? (
@@ -119,16 +134,15 @@ export const AddPolicyModal = ({ isOpen, onClose, onAdd }) => {
 									<h3>{selectedType.name}</h3>
 									<p>Category: {selectedType.type}</p>
 								</div>
+								
 								<div className={styles.inputField}>
 									<label>Display Name</label>
 									<input
 										value={formData.displayName}
-										onChange={e => {
-											const val = e.target.value;
-											setFormData({ ...formData, displayName: val, name: val });
-										}}
+										onChange={e => setFormData({ ...formData, displayName: e.target.value })}
 									/>
 								</div>
+								
 								<div className={styles.inputField}>
 									<label>Name</label>
 									<input
@@ -136,8 +150,65 @@ export const AddPolicyModal = ({ isOpen, onClose, onAdd }) => {
 										onChange={e => setFormData({ ...formData, name: e.target.value })}
 									/>
 								</div>
-								<div className={styles.inputField}>
-								</div>
+
+								{isScriptPolicy && (
+									<div className={styles.scriptSection}>
+										<div className={styles.inputField}>
+											<label>Script File</label>
+											<select 
+												className={styles.select}
+												value={formData.scriptAction === 'existing' ? formData.scriptFile : formData.scriptAction}
+												onChange={(e) => {
+													const val = e.target.value;
+													if (val === 'new' || val === 'import') {
+														const ext = selectedType.name.toLowerCase() === 'javascript' ? '.js' : '.py';
+														setFormData({ 
+															...formData, 
+															scriptAction: val, 
+															scriptFile: `${formData.name}${ext}` 
+														});
+													} else {
+														setFormData({ ...formData, scriptAction: 'existing', scriptFile: val });
+													}
+												}}
+											>
+												{scripts.map(s => <option key={s.path} value={s.name}>{s.name}</option>)}
+												<option value="new">Create new script</option>
+												<option value="import">Import new script</option>
+											</select>
+										</div>
+
+										{formData.scriptAction === 'import' && (
+											<div className={styles.inputField}>
+												<label>File Source</label>
+												<div className={styles.filePickerRow}>
+													<button 
+														className={styles.btnSecondary}
+														onClick={() => fileInputRef.current.click()}
+													>
+														{selectedImportedFile ? selectedImportedFile.name : 'Choose File'}
+													</button>
+													<input 
+														type="file" 
+														ref={fileInputRef} 
+														style={{ display: 'none' }} 
+														onChange={(e) => setSelectedImportedFile(e.target.files[0])}
+													/>
+												</div>
+											</div>
+										)}
+
+										{(formData.scriptAction === 'new' || formData.scriptAction === 'import') && (
+											<div className={styles.inputField}>
+												<label>Script Name</label>
+												<input
+													value={formData.scriptFile}
+													onChange={e => setFormData({ ...formData, scriptFile: e.target.value })}
+												/>
+											</div>
+										)}
+									</div>
+								)}
 							</div>
 						) : (
 							<div className={styles.placeholder}>
@@ -149,15 +220,11 @@ export const AddPolicyModal = ({ isOpen, onClose, onAdd }) => {
 
 				<footer className={styles.footer}>
 					<button className={styles.btnCancel} onClick={onClose}>Cancel</button>
-
 					<button
 						className={styles.btnAdd}
-						disabled={!selectedType || !formData.name.trim()}
-						onClick={() => {
-							console.log("Datos enviados desde el Modal:", selectedType, formData); // <-- Agrega este log para verificar
-							onAdd(selectedType, formData);
-						}}
-						>
+						disabled={!selectedType || !formData.name.trim() || (formData.scriptAction === 'import' && !selectedImportedFile)}
+						onClick={() => onAdd(selectedType, { ...formData, importedFile: selectedImportedFile })}
+					>
 						Add Policy
 					</button>
 				</footer>

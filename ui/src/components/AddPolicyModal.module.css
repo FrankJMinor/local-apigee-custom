@@ -284,3 +284,45 @@
   text-align: center;
   font-style: italic;
 }
+
+.select {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #ffffff;
+  padding: 10px;
+  border-radius: 6px;
+  width: 100%;
+  outline: none;
+  cursor: pointer;
+}
+
+.select:focus {
+  border-color: #00d1ff;
+}
+
+.scriptSection {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #334155;
+}
+
+.filePickerRow {
+  display: flex;
+  gap: 10px;
+}
+
+.btnSecondary {
+  background: #334155;
+  color: #f8fafc;
+  border: 1px solid #475569;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  width: 100%;
+  text-align: left;
+}
+
+.btnSecondary:hover {
+  background: #475569;
+}

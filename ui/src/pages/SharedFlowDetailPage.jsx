@@ -508,30 +508,50 @@ function SharedFlowDetailPage() {
         setFlowStepsDraft(nextSteps);
     };
 
-    const handleCreatePolicy = (selectedType, formData) => {
+    const handleCreatePolicy = async (selectedType, formData) => {
         try {
             const policyName = formData.name;
             let xmlContent = selectedType.xml_template;
-
             if (!xmlContent) return;
 
+            // 1. Crear el script volátil si es necesario
+            if (formData.scriptAction === 'new' || formData.scriptAction === 'import') {
+                const folder = selectedType.name.toLowerCase() === 'javascript' ? 'jsc' : 'py';
+                const scriptData = {
+                    name: formData.scriptFile,
+                    folder: folder,
+                    source: formData.scriptAction,
+                    file: formData.importedFile,
+                    content: formData.scriptAction === 'new' ? `/* New ${selectedType.name} script */` : null,
+                    type: 'Script'
+                };
+                await handleAddLocalResource(scriptData);
+            }
+
+            // 2. Personalizar XML de la Política
             xmlContent = xmlContent.replace(/name="[^"]*"/, `name="${policyName}"`);
             xmlContent = xmlContent.replace(/<DisplayName>.*?<\/DisplayName>/, `<DisplayName>${policyName}</DisplayName>`);
+            
+            // 3. Asociar el archivo en el <ResourceURL>
+            if (formData.scriptFile) {
+                const prefix = selectedType.name.toLowerCase() === 'javascript' ? 'jsc' : 'py';
+                xmlContent = xmlContent.replace(/<ResourceURL>.*?<\/ResourceURL>/, `<ResourceURL>${prefix}://${formData.scriptFile}</ResourceURL>`);
+            }
 
-            const newFile = {
-                name: policyName,
-                full_name: `${policyName}.xml`,
-                type: selectedType.name,
-                content: xmlContent,
-                path: `policies/${policyName}.xml`
+            const newFile = { 
+                name: policyName, 
+                full_name: `${policyName}.xml`, 
+                type: selectedType.name, 
+                content: xmlContent, 
+                path: `policies/${policyName}.xml` 
             };
 
-            setLocalFiles(prev => [...prev, newFile]);
+            setLocalFiles(prev => [...prev, newFile]); 
             setFileCache(prev => ({ ...prev, [newFile.path]: xmlContent }));
-            handleSelectFile(newFile);
+            handleSelectFile(newFile); 
             setIsAddPolicyModalOpen(false);
-        } catch (error) {
-            console.error("Error adding policy:", error);
+        } catch (error) { 
+            console.error("Error adding policy:", error); 
         }
     };
 
@@ -848,6 +868,7 @@ function SharedFlowDetailPage() {
                 isOpen={isAddPolicyModalOpen} 
                 onClose={() => setIsAddPolicyModalOpen(false)} 
                 onAdd={handleCreatePolicy} 
+                scripts={localScripts} // <--- AGREGAR ESTA PROP
             />
             <AddResourceModal 
                 open={isAddResourceModalOpen} 
