@@ -29,6 +29,7 @@ from APIs.views import (
     EmulatorStatusView,
     ProxyDeployedListView,
     ProxyFileListView,
+    ProxyFileUpdateView,
     SharedFlowDeployedListView,
     SharedFlowFileListView,
 )
@@ -45,6 +46,8 @@ urlpatterns = [
     path("v1/proxies/deployed", ProxyDeployedListView.as_view()),
     # Rutas para operaciones de archivos dentro de un proxy específico
     path("v1/proxies/<str:proxy_name>/files", ProxyFileListView.as_view()),
+    # Guarda los archivos editados en la UI y redespliega el proxy
+    path("v1/proxies/<str:proxy_name>/update", ProxyFileUpdateView.as_view()),
     # Ruta para listar shared flows desplegados (sin detalles de archivos)
     path("v1/sharedflows/deployed", SharedFlowDeployedListView.as_view()),
     # Rutas para operaciones de archivos dentro de un shared flow específico

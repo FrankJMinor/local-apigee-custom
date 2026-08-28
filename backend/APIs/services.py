@@ -21,12 +21,14 @@ def get_latest_revision_path() -> Optional[str]:
     la revisión más reciente de los proxies desplegados en el emulador de Apigee.
 
     La función navega por la estructura interna del emulador (/sdlc/contracts/<ID>)
-    identificando la carpeta con el número de revisión más alto, asegurando que
-    el backend siempre lea el estado inmutable más reciente del runtime.
+    apoyándose en :func:`get_current_revision`, que pregunta al emulador cuál es el
+    contrato realmente activo. No basta con tomar la carpeta numérica más alta: un
+    despliegue que falla al compilar deja igualmente su carpeta en disco, y leerla
+    mostraría en la UI archivos que el emulador rechazó.
 
     Returns:
-        Optional[str]: Ruta absoluta hacia la carpeta 'apiproxies' de la última
-        revisión, o None si no se encuentra un despliegue activo o la ruta base.
+        Optional[str]: Ruta absoluta hacia la carpeta 'apiproxies' de la revisión
+        activa, o None si no se encuentra un despliegue activo o la ruta base.
 
     Note:
         Esta función depende de que el volumen 'apigee_contracts_vol' esté correctamente
@@ -44,18 +46,66 @@ def get_latest_revision_path() -> Optional[str]:
         logger.warning(f"Estructura 'sdlc/contracts' no encontrada en {BASE_CONTRACTS}")
         return None
 
-    # 3. Identificación de revisiones inmutables (directorios numéricos)
-    revisions = [d for d in os.listdir(ruta_contratos) if d.isdigit()]
+    # 3. Revisión realmente activa según el emulador
+    active = get_current_revision()
 
-    if not revisions:
+    if not active:
         logger.info("No se detectaron carpetas de revisión (sin despliegues).")
         return None
 
-    # 4. Selección de la revisión activa (ID numérico más alto)
-    latest = max(revisions, key=int)
+    # 4. Si el contrato activo ya no está en disco, caemos al más alto disponible
+    if not os.path.isdir(os.path.join(ruta_contratos, active)):
+        revisions = _revisions_on_disk()
+        if not revisions:
+            return None
+        active = max(revisions, key=int)
+        logger.warning(f"Contrato activo ausente en disco; usando la revisión {active}")
 
     # 5. Retorno de la ruta profunda hacia los bundles de proxies
-    return os.path.join(ruta_contratos, latest, "src", "main", "apigee", "apiproxies")
+    return os.path.join(ruta_contratos, active, "src", "main", "apigee", "apiproxies")
+
+
+def _revisions_on_disk() -> List[str]:
+    """Carpetas de contrato materializadas en el volumen del emulador."""
+    ruta_contratos = os.path.join(BASE_CONTRACTS, "sdlc", "contracts")
+
+    if not os.path.exists(ruta_contratos):
+        logger.debug(f"Sin estructura de contratos en {ruta_contratos}")
+        return []
+
+    return [d for d in os.listdir(ruta_contratos) if d.isdigit()]
+
+
+def get_current_revision() -> Optional[str]:
+    """Devuelve la revisión (contrato) que el emulador tiene realmente activa.
+
+    Ojo con no deducirla de la carpeta numérica más alta: cuando un despliegue
+    falla al compilar, el emulador ya ha extraído el código fuente en
+    ``contracts/<N>`` y esa carpeta se queda ahí. Fiarse del máximo haría que la
+    UI mostrara —y editara— los archivos de un contrato rechazado.
+
+    La fuente fiable es el ``proxyUID`` que reporta ``/v1/emulator/tree``, que
+    identifica el contrato en ejecución. Si el emulador no responde, caemos a la
+    carpeta más alta como mejor estimación disponible.
+
+    Returns:
+        Optional[str]: Número de revisión, o None si no hay despliegues activos.
+    """
+    # Import local: services se carga durante el arranque de Django y emulator
+    # depende de settings ya configurado.
+    from .emulator import EmulatorError, get_tree
+
+    try:
+        deployments = get_tree()
+        uids = [str(d.get("proxyUID")) for d in deployments if str(d.get("proxyUID", "")).isdigit()]
+
+        if uids:
+            return max(uids, key=int)
+    except EmulatorError as exc:
+        logger.warning(f"No se pudo consultar la revisión activa al emulador: {exc}")
+
+    revisions = _revisions_on_disk()
+    return max(revisions, key=int) if revisions else None
 
 
 def get_proxy_file_tree(proxy_name: str) -> Optional[Dict[str, Any]]:
@@ -144,18 +194,22 @@ def get_list_shared_flows() -> List[str]:
         logger.warning(f"Estructura 'sdlc/contracts' no encontrada en {BASE_CONTRACTS}")
         return None
 
-    # 3. Identificación de revisiones inmutables (directorios numéricos)
-    revisions = [d for d in os.listdir(ruta_contratos) if d.isdigit()]
+    # 3. Revisión realmente activa según el emulador (ver get_current_revision)
+    active = get_current_revision()
 
-    if not revisions:
+    if not active:
         logger.info("No se detectaron carpetas de revisión (sin despliegues).")
         return None
 
-    # 4. Selección de la revisión activa (ID numérico más alto)
-    latest = max(revisions, key=int)
+    # 4. Si el contrato activo ya no está en disco, caemos al más alto disponible
+    if not os.path.isdir(os.path.join(ruta_contratos, active)):
+        revisions = _revisions_on_disk()
+        if not revisions:
+            return None
+        active = max(revisions, key=int)
 
-    # 5. Retorno de la ruta profunda hacia los bundles de proxies
-    return os.path.join(ruta_contratos, latest, "src", "main", "apigee", "sharedflows")
+    # 5. Retorno de la ruta profunda hacia los bundles de shared flows
+    return os.path.join(ruta_contratos, active, "src", "main", "apigee", "sharedflows")
 
 
 def get_sharedflow_file_tree(shared_flow_name: str) -> Optional[Dict[str, Any]]:

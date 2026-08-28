@@ -126,6 +126,42 @@ Se aceptan las dos formas habituales de empaquetado: `apiproxy/...` en la raíz
 del ZIP (formato oficial de Apigee) y `MiProxy/apiproxy/...` (comprimir la
 carpeta del proxy).
 
+### Guardar y desplegar desde el editor (botón Save)
+
+En el detalle de un proxy, **Save** persiste lo editado (XML de políticas,
+endpoints, scripts) y despliega la revisión resultante en el emulador. El botón
+solo se habilita si hay cambios pendientes y muestra un punto (`Save •`) cuando
+los hay. **Deploy**, al lado, redespliega el workspace tal como está en disco sin
+escribir nada.
+
+Mientras la operación está en curso, el chip de estado de la cabecera pasa de
+`● Active` (verde) a `Deploying…` (ámbar, con un punto que late) y ambos botones
+quedan deshabilitados. Si el emulador rechaza el contrato, el chip queda en
+`● Deploy failed` (rojo) y aparece un banner con el diagnóstico exacto que
+devuelve el emulador, por ejemplo:
+
+```
+SetResponse.xml (Line:1:65): The element type "Payload" must be terminated
+by the matching end-tag "</Payload>".
+```
+
+El guardado es transaccional: `POST /v1/proxies/{proxy}/update` respalda el bundle
+antes de escribir y, si el despliegue falla, restaura los archivos al último
+estado válido. El workspace nunca se queda en un estado que el emulador rechaza.
+
+### De dónde sale el número de revisión
+
+El indicador *Revision* refleja el contrato que el emulador tiene **realmente
+activo**, no la carpeta más alta de `sdlc/contracts/`. La distinción importa: si un
+despliegue falla al compilar, el emulador ya ha extraído el código fuente en
+`contracts/<N>` y esa carpeta se queda ahí. Deducir la revisión del máximo haría
+que la UI mostrara —y dejara editar— los archivos de un contrato rechazado.
+
+La fuente fiable es el `proxyUID` que reporta `GET /v1/emulator/tree`, que
+identifica el contrato en ejecución. `get_current_revision()` lo consulta y cae a
+la carpeta más alta solo si el emulador no responde.
+
+
 ### La API de administración del emulador
 
 El emulador expone una API REST en el **puerto 8080 del contenedor** (publicado
@@ -155,6 +191,7 @@ contrato; el emulador crea la carpeta de la revisión y borra las anteriores.
 | `POST` | `/v1/organizations/{org}/apis`      | Importa un bundle ZIP y lo despliega                        |
 | `POST` | `/v1/emulator/deploy`               | Redespliega todo el workspace (equivale al *Deploy* de VS Code) |
 | `GET`  | `/v1/emulator/status`               | Versión del emulador + árbol de endpoints activos          |
+| `POST` | `/v1/proxies/{proxy}/update`        | Guarda archivos editados y despliega (con rollback)        |
 
 Variables de entorno del servicio `backend-api` (ver `docker-compose.yml`):
 

@@ -87,13 +87,97 @@
 }
 
 .statusChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   font-size: 0.75rem;
   font-weight: 600;
   color: #10b981;
   background: rgba(16, 185, 129, 0.1);
   padding: 0.35rem 0.75rem;
   border-radius: 20px;
+  white-space: nowrap;
+  transition: color 0.2s, background 0.2s;
 }
+
+/* Despliegue en curso: ámbar con un punto que late */
+.statusChipDeploying {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.statusChipError {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+  cursor: help;
+}
+
+.statusPulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: statusPulse 1s ease-in-out infinite;
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.35; transform: scale(0.72); }
+}
+
+/* ── Banner de error de despliegue ── */
+.deployErrorBar {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin: 0 1.5rem 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.deployErrorBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.82rem;
+}
+
+.deployErrorHint {
+  color: #f8b4b4;
+  opacity: 0.85;
+}
+
+.deployErrorDetail {
+  margin-top: 0.3rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.28);
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 9rem;
+  overflow: auto;
+}
+
+.deployErrorClose {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.deployErrorClose:hover { opacity: 1; }
 
 .actionGroup {
   display: flex;
@@ -113,13 +197,13 @@
   border: none;
 }
 
- btnSave {
+.btnSave {
   background: rgba(255, 255, 255, 0.05);
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
- btnSave:hover {
+.btnSave:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.1);
 }
 
@@ -128,9 +212,15 @@
   color: #fff;
 }
 
-.btnDeploy:hover {
+.btnDeploy:hover:not(:disabled) {
   background: #2563eb;
   box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+}
+
+.btnSave:disabled, .btnDeploy:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 /* ── Tabs ────────────────────────────────────────────────────────────────── */

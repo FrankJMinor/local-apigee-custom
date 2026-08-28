@@ -15,6 +15,7 @@ from rest_framework.views import APIView
 
 from . import bundles, emulator
 from .services import (
+    get_current_revision,
     get_latest_revision_path,
     get_list_shared_flows,
     get_proxy_file_tree,
@@ -305,7 +306,14 @@ class ProxyFileListView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        return Response({"proxy": proxy_name, "total_files": len(files), "files": files})
+        return Response(
+            {
+                "proxy": proxy_name,
+                "revision": get_current_revision(),
+                "total_files": len(files),
+                "files": files,
+            }
+        )
 
 
 # Esta clase es para listar los shared flows desplegados, similar a ProxyDeployedListView pero para shared flows
@@ -400,3 +408,110 @@ class EmulatorStatusView(APIView):
                 {"error": exc.message, "detail": exc.detail},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
+
+
+# Esta clase persiste en el workspace lo que se edita en el editor de la UI
+# (XML de políticas, endpoints, scripts) y opcionalmente redespliega el proxy.
+class ProxyFileUpdateView(APIView):
+    """Guarda archivos editados de un proxy y despliega la revisión resultante."""
+
+    @extend_schema(
+        summary="Guarda archivos de un proxy y lo despliega",
+        description=(
+            "Escribe el contenido editado en `src/main/apigee/apiproxies/<proxy>/apiproxy/` "
+            "y, si `deploy` es true, lanza el despliegue en el emulador devolviendo la "
+            "revisión resultante. Si el emulador rechaza el contrato, los archivos "
+            "vuelven a su estado anterior.\n\n"
+            "Acepta un único archivo (`path` + `content`) o varios en `files`."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "content": {"type": "string"},
+                    "files": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "path": {"type": "string"},
+                                "content": {"type": "string"},
+                            },
+                        },
+                    },
+                    "deploy": {"type": "boolean", "default": True},
+                    "environment": {"type": "string"},
+                },
+            }
+        },
+        responses={200: dict, 400: dict, 502: dict},
+    )
+    def post(self, request, proxy_name):
+        payload = request.data if isinstance(request.data, dict) else {}
+        files = payload.get("files")
+
+        # Compatibilidad con el guardado de un solo archivo desde el editor.
+        if not files and payload.get("path") is not None:
+            files = [{"path": payload.get("path"), "content": payload.get("content")}]
+
+        if not isinstance(files, list) or not files:
+            return Response(
+                {
+                    "error": "No se recibió ningún archivo que guardar.",
+                    "detail": "Envía 'files': [{'path': ..., 'content': ...}] o 'path' y 'content'.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        environment = payload.get("environment") or settings.APIGEE_ENVIRONMENT
+        should_deploy = _as_bool(payload.get("deploy", True))
+
+        try:
+            written, backup = bundles.save_proxy_files(proxy_name, files)
+        except bundles.BundleError as exc:
+            logger.warning(f"Guardado rechazado para '{proxy_name}': {exc}")
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not should_deploy:
+            bundles.discard_backup(backup)
+            return Response(
+                {
+                    "proxy": proxy_name,
+                    "saved": written,
+                    "deployed": False,
+                    "revision": get_current_revision(),
+                }
+            )
+
+        try:
+            deployment = emulator.deploy_workspace(environment)
+        except emulator.EmulatorError as exc:
+            # El contrato no compiló: deshacemos la edición para no dejar el
+            # workspace en un estado que el emulador no acepta.
+            logger.error(f"Despliegue fallido tras editar '{proxy_name}', revirtiendo: {exc}")
+            bundles.restore_bundle(backup, proxy_name)
+
+            return Response(
+                {
+                    "error": exc.message,
+                    "detail": exc.detail,
+                    "proxy": proxy_name,
+                    "reverted": True,
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        bundles.discard_backup(backup)
+        revision = str(deployment.get("revision") or get_current_revision() or "1")
+        logger.info(f"Proxy '{proxy_name}' actualizado y desplegado en la revisión {revision}")
+
+        return Response(
+            {
+                "proxy": proxy_name,
+                "saved": written,
+                "deployed": True,
+                "environment": environment,
+                "revision": revision,
+            }
+        )

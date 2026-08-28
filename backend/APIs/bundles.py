@@ -288,11 +288,17 @@ def remove_bundle(proxy_name: str) -> None:
         logger.info(f"Bundle '{proxy_name}' eliminado de {target}")
 
 
-def backup_bundle(proxy_name: str) -> Optional[str]:
+def backup_bundle(proxy_name: str, keep_original: bool = False) -> Optional[str]:
     """Aparta la versión actual del proxy para poder restaurarla si algo falla.
 
     El workspace está versionado en Git, así que una sobrescritura fallida no
     puede dejar al usuario sin su bundle anterior.
+
+    Args:
+        proxy_name: Proxy a respaldar.
+        keep_original: Si es True copia en lugar de mover, dejando el proxy en su
+            sitio. Lo usa el guardado desde el editor, que reescribe unos pocos
+            archivos sobre el bundle existente en vez de reemplazarlo entero.
 
     Returns:
         Optional[str]: Ruta del respaldo, o None si el proxy no existía.
@@ -304,7 +310,12 @@ def backup_bundle(proxy_name: str) -> Optional[str]:
 
     backup = tempfile.mkdtemp(prefix=f"apigee-backup-{proxy_name}-")
     destination = os.path.join(backup, proxy_name)
-    shutil.move(source, destination)
+
+    if keep_original:
+        shutil.copytree(source, destination)
+    else:
+        shutil.move(source, destination)
+
     logger.info(f"Respaldo de '{proxy_name}' creado en {destination}")
     return destination
 
@@ -396,6 +407,92 @@ def _edit_deployments(proxy_name: str, environment: Optional[str], add: bool) ->
     action = "registrado en" if add else "eliminado de"
     logger.info(f"Proxy '{proxy_name}' {action} {path}")
     return True
+
+
+def proxy_bundle_dir(proxy_name: str) -> str:
+    """Ruta a la carpeta ``apiproxy`` de un proxy dentro del workspace."""
+    return os.path.join(proxies_dir(), proxy_name, BUNDLE_ROOT)
+
+
+def _resolve_inside_bundle(bundle_root: str, rel_path: str) -> str:
+    """Convierte una ruta relativa del editor en una ruta absoluta segura.
+
+    La UI envía rutas como ``policies/GetKVM.xml`` o ``proxies\\default.xml``.
+    Se normalizan y se comprueba que el resultado siga dentro del bundle, para
+    que un ``..`` no pueda escribir fuera del proxy.
+    """
+    normalized = (rel_path or "").replace("\\", "/").strip().lstrip("/")
+
+    if not normalized:
+        raise BundleError("La ruta del archivo es obligatoria.")
+
+    destination = os.path.normpath(os.path.join(bundle_root, *normalized.split("/")))
+    root = os.path.normpath(bundle_root)
+
+    if destination != root and not destination.startswith(root + os.sep):
+        raise BundleError(f"Ruta fuera del bundle del proxy: '{rel_path}'")
+
+    return destination
+
+
+def save_proxy_files(proxy_name: str, files: List[Dict[str, str]]) -> Tuple[List[str], str]:
+    """Escribe en el workspace los archivos editados desde la UI.
+
+    Antes de tocar nada respalda el estado actual del proxy, de modo que el
+    llamador pueda revertir si el emulador rechaza el contrato resultante.
+
+    Args:
+        proxy_name: Proxy a modificar; debe existir ya en el workspace.
+        files: Lista de ``{"path": ..., "content": ...}`` relativos a ``apiproxy/``.
+
+    Returns:
+        Tuple[List[str], str]: rutas escritas y ruta del respaldo. El llamador
+        debe cerrar el respaldo con :func:`discard_backup` o :func:`restore_bundle`.
+
+    Raises:
+        BundleError: Si el proxy no existe, la lista viene vacía o una ruta es inválida.
+    """
+    name = validate_proxy_name(proxy_name)
+    bundle_root = proxy_bundle_dir(name)
+
+    if not os.path.isdir(bundle_root):
+        raise BundleError(
+            f"El proxy '{name}' no existe en el workspace. "
+            "Impórtalo primero con '+ Nuevo Proxy'."
+        )
+
+    if not files:
+        raise BundleError("No se recibió ningún archivo que guardar.")
+
+    # Validamos todas las rutas antes de escribir, para no dejar el bundle a medias.
+    planned = []
+    for entry in files:
+        if not isinstance(entry, dict):
+            raise BundleError("Cada archivo debe ser un objeto con 'path' y 'content'.")
+
+        content = entry.get("content")
+        if content is None:
+            raise BundleError(f"Falta el contenido del archivo '{entry.get('path')}'.")
+
+        planned.append((_resolve_inside_bundle(bundle_root, entry.get("path")), str(content)))
+
+    backup = backup_bundle(name, keep_original=True)
+
+    try:
+        for destination, content in planned:
+            os.makedirs(os.path.dirname(destination), exist_ok=True)
+            with open(destination, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(content)
+    except OSError as exc:
+        restore_bundle(backup, name)
+        raise BundleError(f"No se pudo escribir en el workspace: {exc}") from exc
+
+    written = [
+        os.path.relpath(destination, bundle_root).replace(os.sep, "/")
+        for destination, _ in planned
+    ]
+    logger.info(f"Guardados {len(written)} archivo(s) del proxy '{name}': {written}")
+    return written, backup
 
 
 def import_proxy_bundle(

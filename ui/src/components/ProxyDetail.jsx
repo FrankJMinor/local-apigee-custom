@@ -13,6 +13,7 @@ import {
 } from './Icons';
 import { AddPolicyModal } from './AddPolicyModal';
 import { AddFlowModal } from './AddFlowModal';
+import { saveProxyFiles, deployWorkspace } from '../utils/deployProxy';
 import SpikeArrestSVG from '../../icons/SpikeArrest.svg';
 
 // Configuración global de Monaco para Apigee (Rhino/ES5)
@@ -556,6 +557,11 @@ function ProxyDetail({ proxy, fileTree, onClose, refreshFileTree }) {
   const [isVolatile, setIsVolatile] = useState(true);
   const [fileCache, setFileCache] = useState({}); // Cache para persistir cambios entre archivos
   const [isSaving, setIsSaving] = useState(false);
+  // Estado del despliegue: alimenta el chip de la cabecera (Active / Deploying / Error).
+  const [deployState, setDeployState] = useState('idle');
+  const [deployError, setDeployError] = useState(null);
+  // La revisión viva la manda el emulador; arrancamos con la que trajo la página.
+  const [revision, setRevision] = useState(proxy?.revision || '1');
   const [isResourceModalOpen, setIsResourceModalOpen] = useState(false);
   const [localFiles, setLocalFiles] = useState([]); // Archivos locales (políticas)
   const [localScripts, setLocalScripts] = useState([]); // Archivos locales (scripts)
@@ -657,6 +663,16 @@ function ProxyDetail({ proxy, fileTree, onClose, refreshFileTree }) {
     }
   }, [fileTree]);
 
+  // El emulador es la fuente de verdad de la revisión: la recogemos cuando la
+  // página vuelve a leerla tras un despliegue.
+  useEffect(() => {
+    if (proxy?.revision) setRevision(String(proxy.revision));
+  }, [proxy?.revision]);
+
+  // Espejo de selectedFile para leerlo desde efectos sin volverlo dependencia.
+  const selectedFileRef = useRef(null);
+  useEffect(() => { selectedFileRef.current = selectedFile; }, [selectedFile]);
+
   const [expanded, setExpanded] = useState({
     policies: true,
     proxyEndpoints: true,
@@ -735,15 +751,33 @@ function ProxyDetail({ proxy, fileTree, onClose, refreshFileTree }) {
 
   // Efecto inicial para cargar el archivo por defecto (priorizando default.xml)
   useEffect(() => {
-    if (fileTree) {
-      // Prioridad 1: default.xml en proxy_endpoints
-      const proxyDefault = fileTree.proxy_endpoints?.find(f => f.full_name === 'default.xml');
-      // Prioridad 2: root_config
-      const initial = proxyDefault || fileTree.root_config;
-      
-      if (initial) {
-        handleSelectFile(initial);
-      }
+    if (!fileTree) return;
+
+    // El árbol también se relee tras guardar. En ese caso hay que conservar el
+    // archivo abierto —volver a default.xml sacaría al usuario de donde estaba—
+    // y limitarse a re-apuntarlo a su versión recién leída de disco.
+    const open = selectedFileRef.current;
+
+    if (open) {
+      const refreshed = [
+        fileTree.root_config,
+        ...(fileTree.policies || []),
+        ...(fileTree.proxy_endpoints || []),
+        ...(fileTree.target_endpoints || []),
+        ...(fileTree.scripts || []),
+      ].find(f => f && f.path === open.path);
+
+      if (refreshed) setSelectedFile(refreshed);
+      return;
+    }
+
+    // Prioridad 1: default.xml en proxy_endpoints
+    const proxyDefault = fileTree.proxy_endpoints?.find(f => f.full_name === 'default.xml');
+    // Prioridad 2: root_config
+    const initial = proxyDefault || fileTree.root_config;
+
+    if (initial) {
+      handleSelectFile(initial);
     }
   }, [fileTree]);
 
@@ -1076,29 +1110,113 @@ function ProxyDetail({ proxy, fileTree, onClose, refreshFileTree }) {
     }
   });
 
-  const handleSave = async () => {
-    if (!selectedFile) return;
+  // Contenido tal como está en disco, para distinguir lo que realmente cambió.
+  const originalContents = React.useMemo(() => {
+    const map = {};
+    if (!fileTree) return map;
+
+    const collect = (list) => (list || []).forEach(f => { map[f.path] = f.content ?? ''; });
+    if (fileTree.root_config) map[fileTree.root_config.path] = fileTree.root_config.content ?? '';
+    collect(fileTree.policies);
+    collect(fileTree.proxy_endpoints);
+    collect(fileTree.target_endpoints);
+    collect(fileTree.scripts);
+    return map;
+  }, [fileTree]);
+
+  /**
+   * Reúne todo lo pendiente de guardar: archivos editados y los creados en la
+   * sesión (políticas y recursos nuevos), que aún no existen en disco.
+   */
+  const collectDirtyFiles = useCallback(() => {
+    const pending = new Map();
+
+    const consider = (path, content) => {
+      if (!path || content === undefined || content === null) return;
+      if (originalContents[path] === content) return; // sin cambios respecto a disco
+      pending.set(path, { path, content });
+    };
+
+    // El buffer del editor manda sobre la caché para el archivo abierto.
+    if (selectedFile) consider(selectedFile.path, xmlCode);
+
+    Object.entries(fileCache).forEach(([path, content]) => {
+      if (selectedFile && path === selectedFile.path) return;
+      consider(path, content);
+    });
+
+    // Políticas y recursos creados en esta sesión que nunca llegaron a la caché.
+    [...(localFiles || []), ...(localScripts || [])].forEach(file => {
+      if (pending.has(file.path) || originalContents[file.path] !== undefined) return;
+      consider(file.path, fileCache[file.path] ?? file.content);
+    });
+
+    return Array.from(pending.values());
+  }, [selectedFile, xmlCode, fileCache, localFiles, localScripts, originalContents]);
+
+  const hasPendingChanges = collectDirtyFiles().length > 0;
+
+  /**
+   * Escribe los archivos en el workspace y despliega la revisión resultante.
+   * Si el emulador rechaza el contrato, el backend revierte lo escrito.
+   */
+  const persistAndDeploy = async (files) => {
+    if (!files.length) return null;
 
     setIsSaving(true);
+    setDeployState('deploying');
+    setDeployError(null);
+
     try {
-      const response = await fetch(`http://localhost:8446/v1/proxies/${proxy.name}/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          path: selectedFile.path,
-          content: xmlCode
-        })
-      });
+      const result = await saveProxyFiles({ proxyName: proxy.name, files });
 
-      if (!response.ok) throw new Error('Error al guardar archivo');
+      if (result?.revision) setRevision(String(result.revision));
+      setDeployState('idle');
 
-      // Actualizar el objeto selectedFile localmente para que content coincida
-      selectedFile.content = xmlCode;
-      alert('Archivo guardado correctamente');
+      // Releemos el árbol para que el contenido en disco vuelva a ser la referencia.
+      refreshFileTree?.();
+      return result;
     } catch (e) {
-      alert(`Error: ${e.message}`);
+      setDeployState('error');
+      setDeployError(e.message);
+      return null;
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Guardado desde el editor: solo el archivo abierto.
+  const handleSave = async () => {
+    if (!selectedFile) return;
+    await persistAndDeploy([{ path: selectedFile.path, content: xmlCode }]);
+  };
+
+  // Guardado desde la cabecera: todo lo pendiente en la sesión.
+  const handleSaveAll = async () => {
+    const files = collectDirtyFiles();
+
+    if (!files.length) {
+      setDeployError(null);
+      return;
+    }
+
+    await persistAndDeploy(files);
+  };
+
+  // Redespliegue sin escribir archivos, para reactivar el contrato actual.
+  const handleDeploy = async () => {
+    setDeployState('deploying');
+    setDeployError(null);
+
+    try {
+      const result = await deployWorkspace();
+      if (result?.revision) setRevision(String(result.revision));
+      setDeployState('idle');
+      // No releemos el árbol: un redespliegue no toca los archivos, y hacerlo
+      // descartaría las ediciones que el usuario aún no ha guardado.
+    } catch (e) {
+      setDeployState('error');
+      setDeployError(e.message);
     }
   };
   const handleResetEditor = () => {
@@ -1114,7 +1232,6 @@ function ProxyDetail({ proxy, fileTree, onClose, refreshFileTree }) {
   };
   const handlePlay = async () => {
     await handleSave();
-    alert('Proxy actualizado en el emulador');
   };
 
   const [isAddPolicyModalOpen, setIsAddPolicyModalOpen] = useState(false);
@@ -1321,15 +1438,60 @@ function ProxyDetail({ proxy, fileTree, onClose, refreshFileTree }) {
         <div className={styles.headerActions}>
           <div className={styles.revIndicator}>
             <span className={styles.revLabel}>Revision</span>
-            <span className={styles.revValue}>{proxy.revision || '1'}</span>
+            <span className={styles.revValue}>{revision}</span>
           </div>
-          <div className={styles.statusChip}>● Active</div>
+
+          <div
+            className={`${styles.statusChip} ${
+              deployState === 'deploying' ? styles.statusChipDeploying : ''
+            } ${deployState === 'error' ? styles.statusChipError : ''}`}
+            title={deployError || undefined}
+          >
+            {deployState === 'deploying' && <><span className={styles.statusPulse} /> Deploying…</>}
+            {deployState === 'error' && <>● Deploy failed</>}
+            {deployState === 'idle' && <>● Active</>}
+          </div>
+
           <div className={styles.actionGroup}>
-            <button className={styles.btnSave}><IconEdit size={14} /> Save</button>
-            <button className={styles.btnDeploy}><IconRocket size={14} /> Deploy</button>
+            <button
+              className={styles.btnSave}
+              onClick={handleSaveAll}
+              disabled={deployState === 'deploying' || !hasPendingChanges}
+              title={hasPendingChanges ? 'Guardar cambios y desplegar' : 'No hay cambios pendientes'}
+            >
+              <IconEdit size={14} /> Save{hasPendingChanges ? ' •' : ''}
+            </button>
+            <button
+              className={styles.btnDeploy}
+              onClick={handleDeploy}
+              disabled={deployState === 'deploying'}
+              title="Redesplegar el workspace en el emulador"
+            >
+              <IconRocket size={14} /> Deploy
+            </button>
           </div>
         </div>
       </header>
+
+      {/* El emulador reporta archivo y línea del XML que falló: merece verse completo */}
+      {deployError && (
+        <div className={styles.deployErrorBar}>
+          <div className={styles.deployErrorBody}>
+            <strong>El emulador rechazó el despliegue.</strong>
+            <span className={styles.deployErrorHint}>
+              Tus archivos se restauraron al último estado válido.
+            </span>
+            <pre className={styles.deployErrorDetail}>{deployError}</pre>
+          </div>
+          <button
+            className={styles.deployErrorClose}
+            onClick={() => { setDeployError(null); setDeployState('idle'); }}
+            aria-label="Cerrar error"
+          >
+            <IconX size={16} />
+          </button>
+        </div>
+      )}
 
       {/* Tabs Navigation */}
       <nav className={styles.navTabs}>

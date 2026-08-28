@@ -14,11 +14,31 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
   consultar el estado vivo del emulador sin depender de VS Code.
 - Módulos `APIs/emulator.py` (cliente de la API de administración del emulador y
   empaquetado del workspace) y `APIs/bundles.py` (validación y registro de bundles).
+- Botón **Save** del detalle de proxy: guarda lo editado (políticas, endpoints, scripts)
+  en el workspace y despliega la revisión resultante en el emulador. Se habilita solo si
+  hay cambios pendientes.
+- `POST /v1/proxies/{proxy}/update`: guardado transaccional: respalda el bundle antes de
+  escribir y lo restaura si el emulador rechaza el contrato.
+- Chip de estado en la cabecera: `● Active` → `Deploying…` (ámbar, con pulso) → `● Active`,
+  o `● Deploy failed` con un banner que muestra el archivo y la línea que reporta el emulador.
+- Botón **Deploy**: redespliega el workspace tal como está en disco, sin escribir archivos.
 
 ### Cambiado
 - `docker-compose.yml`: el servicio `backend-api` monta ahora `./src` completo en
   `/app/workspace` (antes solo `apiproxies`), necesario para empaquetar environments y
   sharedflows al desplegar.
+
+### Corrección
+- La revisión activa y el árbol de archivos se tomaban de la carpeta numérica más alta de
+  `sdlc/contracts/`. Un despliegue que falla al compilar deja igualmente su carpeta ahí, así
+  que la UI mostraba —y dejaba editar— archivos de un contrato rechazado. Ahora se resuelve
+  con el `proxyUID` que reporta el emulador, cayendo al máximo en disco solo si no responde.
+- `POST /v1/proxies/{proxy}/update` no existía: el botón de guardar del editor devolvía 404
+  de forma silenciosa.
+- El editor volvía a `default.xml` cada vez que se releía el árbol, sacando al usuario del
+  archivo que estaba editando.
+- Los selectores `.btnSave` del CSS estaban escritos sin el punto inicial, por lo que nunca
+  se aplicaron.
 
 ---
 

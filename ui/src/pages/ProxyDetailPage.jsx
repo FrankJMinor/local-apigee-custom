@@ -33,17 +33,21 @@ function ProxyDetailPage() {
 
     Promise.all([fetchGeneral, fetchFiles])
       .then(([foundProxy, fileData]) => {
+        // El emulador materializa cada despliegue como contrato numerado; esa
+        // revisión (la que devuelve /files) manda sobre la de la lista.
+        const emulatorRevision = fileData.revision;
+
         if (foundProxy) {
           const rev = (foundProxy.revision || [])[0] || {};
           setProxy({
             ...foundProxy,
             ...rev,
             name: proxyName,
-            revision: rev.name || '1',
+            revision: emulatorRevision || rev.name || '1',
           });
         } else {
           // Fallback if not found in list but files exist
-          setProxy({ name: proxyName, revision: '1' });
+          setProxy({ name: proxyName, revision: emulatorRevision || '1' });
         }
         setFileTree(fileData.files);
       })
@@ -52,9 +56,14 @@ function ProxyDetailPage() {
   }, [proxyName]);
 
   const refreshFiles = () => {
-    fetch(`http://localhost:8446/v1/proxies/${proxyName}/files`)
+    fetch(`/v1/proxies/${proxyName}/files`)
       .then(res => res.json())
-      .then(data => setFileTree(data.files))
+      .then(data => {
+        setFileTree(data.files);
+        if (data.revision) {
+          setProxy(prev => (prev ? { ...prev, revision: String(data.revision) } : prev));
+        }
+      })
       .catch(e => console.error("Error refreshing files:", e));
   };
 
