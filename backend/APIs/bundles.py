@@ -200,6 +200,27 @@ def existing_proxies() -> List[str]:
     return sorted(d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d)))
 
 
+def resolve_proxy_name(proxy_name: str) -> Optional[str]:
+    """Busca el proxy en disco ignorando mayúsculas y devuelve su nombre real.
+
+    El workspace vive en el sistema de archivos del usuario, que en Windows y
+    macOS no distingue mayúsculas: 'helloWorld' y 'HelloWorld' son la misma
+    carpeta. Comparar los nombres con '==' hace creer que un proxy no existe,
+    y a partir de ahí cualquier escritura o borrado actúa sobre el proxy
+    equivocado. Toda operación sobre un proxy existente debe resolverse aquí.
+
+    Returns:
+        Optional[str]: Nombre tal como está en disco, o None si no existe.
+    """
+    lowered = (proxy_name or "").strip().lower()
+
+    for existing in existing_proxies():
+        if existing.lower() == lowered:
+            return existing
+
+    return None
+
+
 def basepaths_in_use(exclude: Optional[str] = None) -> Dict[str, str]:
     """Mapea cada basepath ya ocupado en el workspace con el proxy que lo declara.
 
@@ -280,12 +301,19 @@ def write_bundle(files: Dict[str, bytes], proxy_name: str, descriptor: Optional[
 
 
 def remove_bundle(proxy_name: str) -> None:
-    """Elimina la carpeta del proxy del workspace (rollback de una importación)."""
-    target = os.path.join(proxies_dir(), proxy_name)
+    """Elimina la carpeta del proxy del workspace.
 
-    if os.path.isdir(target):
-        shutil.rmtree(target, ignore_errors=True)
-        logger.info(f"Bundle '{proxy_name}' eliminado de {target}")
+    Resuelve el nombre real en disco antes de borrar: un ``rmtree`` sobre un
+    nombre que solo difiere en mayúsculas destruiría otro proxy.
+    """
+    on_disk = resolve_proxy_name(proxy_name)
+
+    if not on_disk:
+        return
+
+    target = os.path.join(proxies_dir(), on_disk)
+    shutil.rmtree(target, ignore_errors=True)
+    logger.info(f"Bundle '{on_disk}' eliminado de {target}")
 
 
 def backup_bundle(proxy_name: str, keep_original: bool = False) -> Optional[str]:
@@ -303,13 +331,14 @@ def backup_bundle(proxy_name: str, keep_original: bool = False) -> Optional[str]
     Returns:
         Optional[str]: Ruta del respaldo, o None si el proxy no existía.
     """
-    source = os.path.join(proxies_dir(), proxy_name)
+    on_disk = resolve_proxy_name(proxy_name)
 
-    if not os.path.isdir(source):
+    if not on_disk:
         return None
 
-    backup = tempfile.mkdtemp(prefix=f"apigee-backup-{proxy_name}-")
-    destination = os.path.join(backup, proxy_name)
+    source = os.path.join(proxies_dir(), on_disk)
+    backup = tempfile.mkdtemp(prefix=f"apigee-backup-{on_disk}-")
+    destination = os.path.join(backup, on_disk)
 
     if keep_original:
         shutil.copytree(source, destination)
@@ -382,7 +411,12 @@ def _edit_deployments(proxy_name: str, environment: Optional[str], add: bool) ->
     path = deployments_file(environment)
     manifest = _load_deployments(path)
     proxies = manifest.setdefault("proxies", [])
-    already = any(entry.get("name") == proxy_name for entry in proxies if isinstance(entry, dict))
+    lowered = proxy_name.lower()
+
+    def _matches(entry):
+        return isinstance(entry, dict) and str(entry.get("name", "")).lower() == lowered
+
+    already = any(_matches(entry) for entry in proxies)
 
     if add:
         if already:
@@ -391,11 +425,7 @@ def _edit_deployments(proxy_name: str, environment: Optional[str], add: bool) ->
     else:
         if not already:
             return False
-        manifest["proxies"] = [
-            entry
-            for entry in proxies
-            if not (isinstance(entry, dict) and entry.get("name") == proxy_name)
-        ]
+        manifest["proxies"] = [entry for entry in proxies if not _matches(entry)]
 
     manifest.setdefault("sharedflows", [])
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -452,14 +482,20 @@ def save_proxy_files(proxy_name: str, files: List[Dict[str, str]]) -> Tuple[List
     Raises:
         BundleError: Si el proxy no existe, la lista viene vacía o una ruta es inválida.
     """
-    name = validate_proxy_name(proxy_name)
+    validate_proxy_name(proxy_name)
+    # Trabajamos siempre sobre el nombre real en disco (ver resolve_proxy_name).
+    name = resolve_proxy_name(proxy_name)
+
+    if not name:
+        raise BundleError(
+            f"El proxy '{proxy_name}' no existe en el workspace. "
+            "Impórtalo primero con '+ Nuevo Proxy'."
+        )
+
     bundle_root = proxy_bundle_dir(name)
 
     if not os.path.isdir(bundle_root):
-        raise BundleError(
-            f"El proxy '{name}' no existe en el workspace. "
-            "Impórtalo primero con '+ Nuevo Proxy'."
-        )
+        raise BundleError(f"El proxy '{name}' no tiene carpeta 'apiproxy' en el workspace.")
 
     if not files:
         raise BundleError("No se recibió ningún archivo que guardar.")
@@ -520,16 +556,25 @@ def import_proxy_bundle(
     name = validate_proxy_name(proxy_name)
     files = read_bundle(raw_zip)
     metadata = describe_bundle(files)
-    replaced = name in existing_proxies()
+
+    # Resolvemos ignorando mayúsculas: en Windows 'helloWorld' y 'HelloWorld'
+    # son la misma carpeta, y tratarlas como distintas destruiría la existente.
+    on_disk = resolve_proxy_name(name)
+    replaced = on_disk is not None
 
     if replaced and not overwrite:
-        raise BundleError(
-            f"Ya existe un proxy llamado '{name}' en el workspace. "
-            "Elige otro nombre o habilita la sobrescritura."
+        conflict = (
+            f"Ya existe un proxy llamado '{on_disk}' en el workspace."
+            if on_disk == name
+            else (
+                f"Ya existe el proxy '{on_disk}', que en este sistema de archivos "
+                f"es la misma carpeta que '{name}'."
+            )
         )
+        raise BundleError(f"{conflict} Elige otro nombre o habilita la sobrescritura.")
 
     # Un basepath duplicado hace que el emulador enrute al proxy equivocado.
-    in_use = basepaths_in_use(exclude=name if replaced else None)
+    in_use = basepaths_in_use(exclude=on_disk if replaced else None)
     for base_path in metadata["basepaths"]:
         owner = in_use.get(base_path)
         if owner:
@@ -538,18 +583,83 @@ def import_proxy_bundle(
                 "Apigee no permite dos proxies con el mismo basepath en un environment."
             )
 
-    backup = backup_bundle(name) if replaced else None
+    # El respaldo mueve la carpeta existente, así que el nombre nuevo queda libre
+    # y la escritura no hereda la grafía anterior.
+    backup = backup_bundle(on_disk) if replaced else None
 
     try:
         write_bundle(files, name, metadata["descriptor"])
+        if replaced and on_disk != name:
+            unregister_deployment(on_disk, environment)
         register_deployment(name, environment)
     except OSError as exc:
         remove_bundle(name)
         if backup:
-            restore_bundle(backup, name)
+            restore_bundle(backup, on_disk)
         raise BundleError(f"No se pudo escribir el bundle en el workspace: {exc}") from exc
 
     metadata["name"] = name
     metadata["replaced"] = replaced
+    metadata["replacedName"] = on_disk
     metadata["files"] = sorted(files)
     return metadata, backup
+
+
+def delete_proxy_bundles(
+    proxy_names: List[str], environment: Optional[str] = None
+) -> Tuple[List[str], List[str], Dict[str, str]]:
+    """Saca del workspace uno o varios proxies y los desregistra del environment.
+
+    No borra nada del emulador directamente: el runtime se deriva del workspace,
+    así que el proxy desaparece del contenedor en cuanto se redespliega sin él.
+    Esa parte la dispara el llamador, que además puede revertir con los respaldos
+    devueltos si el emulador rechaza el contrato resultante.
+
+    Args:
+        proxy_names: Nombres a eliminar; se resuelven ignorando mayúsculas.
+        environment: Environment cuyo ``deployments.json`` hay que actualizar.
+
+    Returns:
+        Tuple[List[str], List[str], Dict[str, str]]: eliminados (nombre real),
+        no encontrados, y el mapa ``nombre -> ruta de respaldo`` para revertir.
+
+    Raises:
+        BundleError: Si no se recibe ningún nombre o alguno es inválido.
+    """
+    if not proxy_names:
+        raise BundleError("No se recibió ningún proxy que eliminar.")
+
+    deleted: List[str] = []
+    missing: List[str] = []
+    backups: Dict[str, str] = {}
+
+    for requested in proxy_names:
+        validate_proxy_name(requested)
+        on_disk = resolve_proxy_name(requested)
+
+        if not on_disk:
+            missing.append(requested)
+            continue
+
+        # backup_bundle mueve la carpeta: eso ya la saca del workspace.
+        backup = backup_bundle(on_disk)
+        if backup:
+            backups[on_disk] = backup
+
+        unregister_deployment(on_disk, environment)
+        deleted.append(on_disk)
+
+    logger.info(f"Proxies eliminados del workspace: {deleted or 'ninguno'}")
+    return deleted, missing, backups
+
+
+def restore_deleted_bundles(
+    backups: Dict[str, str], environment: Optional[str] = None
+) -> None:
+    """Deshace :func:`delete_proxy_bundles` devolviendo cada proxy a su sitio."""
+    for name, backup in backups.items():
+        restore_bundle(backup, name)
+        register_deployment(name, environment)
+
+    if backups:
+        logger.info(f"Proxies restaurados tras un borrado fallido: {sorted(backups)}")

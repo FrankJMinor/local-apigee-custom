@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { StatusBadge } from '../components/StatusBadge'
 import { TagChip } from '../components/TagChip'
-import { IconRefresh, IconRocket } from '../components/Icons'
+import { IconRefresh, IconRocket, IconTrash } from '../components/Icons'
 import { NewProxyModal } from '../components/NewProxyModal'
+import { DeleteProxiesModal } from '../components/DeleteProxiesModal'
 import { formatDate } from '../utils/format'
 import { ORGANIZATION } from '../utils/importProxyBundle'
 import { getDotColor, isErrorState } from '../utils/states'
@@ -36,6 +37,9 @@ function ApiProxies() {
   const [error, setError]     = useState(null)
   const [search, setSearch]   = useState('')
   const [modalOpen, setModalOpen] = useState(false)
+  // Nombres marcados para borrar; un proxy puede aparecer en varias filas (revisiones).
+  const [selected, setSelected] = useState(() => new Set())
+  const [pendingDelete, setPendingDelete] = useState([])
   const navigate = useNavigate();
 
   const load = useCallback(() => {
@@ -55,6 +59,29 @@ function ApiProxies() {
     [r.name, r.revision, r.state, r.basePath, ...r.tags].join(' ')
       .toLowerCase().includes(searchLower)
   )
+
+  const visibleNames = [...new Set(filtered.map(r => r.name))]
+  const allVisibleSelected = visibleNames.length > 0 && visibleNames.every(n => selected.has(n))
+
+  const toggleOne = name => setSelected(prev => {
+    const next = new Set(prev)
+    if (next.has(name)) next.delete(name); else next.add(name)
+    return next
+  })
+
+  // La cabecera solo alterna lo que el filtro tiene a la vista.
+  const toggleAllVisible = () => setSelected(prev => {
+    const next = new Set(prev)
+    if (allVisibleSelected) visibleNames.forEach(n => next.delete(n))
+    else visibleNames.forEach(n => next.add(n))
+    return next
+  })
+
+  const handleDeleted = () => {
+    setSelected(new Set())
+    setPendingDelete([])
+    load()
+  }
 
 
 
@@ -84,9 +111,19 @@ function ApiProxies() {
               onChange={e => setSearch(e.target.value)}
             />
           </div>
-          <span className={s.countLabel}>
-            {loading ? '…' : `${filtered.length} de ${rows.length} proxies`}
-          </span>
+          <div className={s.tableBarRight}>
+            {selected.size > 0 && (
+              <button
+                className={s.btnDanger}
+                onClick={() => setPendingDelete([...selected])}
+              >
+                <IconTrash size={13} /> Eliminar ({selected.size})
+              </button>
+            )}
+            <span className={s.countLabel}>
+              {loading ? '…' : `${filtered.length} de ${rows.length} proxies`}
+            </span>
+          </div>
         </div>
 
         {loading && <p className={s.empty}>Cargando proxies...</p>}
@@ -97,6 +134,16 @@ function ApiProxies() {
             <table className={s.table}>
               <thead>
                 <tr>
+                  <th className={s.checkCell}>
+                    <input
+                      type="checkbox"
+                      className={s.checkbox}
+                      checked={allVisibleSelected}
+                      onChange={toggleAllVisible}
+                      disabled={visibleNames.length === 0}
+                      aria-label="Seleccionar todos los proxies visibles"
+                    />
+                  </th>
                   <th>Nombre del Proxy</th>
                   <th>Revisión</th>
                   <th>Estado</th>
@@ -107,9 +154,18 @@ function ApiProxies() {
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={6} className={s.empty}>Sin resultados</td></tr>
+                  <tr><td colSpan={7} className={s.empty}>Sin resultados</td></tr>
                 ) : filtered.map(row => (
-                  <tr key={`${row.name}-${row.revision}`}>
+                  <tr key={`${row.name}-${row.revision}`} className={selected.has(row.name) ? s.rowSelected : ''}>
+                    <td className={s.checkCell}>
+                      <input
+                        type="checkbox"
+                        className={s.checkbox}
+                        checked={selected.has(row.name)}
+                        onChange={() => toggleOne(row.name)}
+                        aria-label={`Seleccionar ${row.name}`}
+                      />
+                    </td>
                     <td>
                       <span className={s.nameCell}>
                         <span className={s.dot} style={{ background: getDotColor(row.state) }} />
@@ -133,13 +189,23 @@ function ApiProxies() {
                     </td>
                     <td className={s.dateCell}>{formatDate(row.lastModified)}</td>
                     <td>
-                      <button
-                        className={`${s.deployBtn} ${isErrorState(row.state) ? s.deployBtnDisabled : ''}`}
-                        disabled={isErrorState(row.state)}
-                        onClick={() => alert(`Desplegando ${row.name}…`)}
-                      >
-                        <IconRocket size={13} /> Desplegar
-                      </button>
+                      <div className={s.actionCell}>
+                        <button
+                          className={`${s.deployBtn} ${isErrorState(row.state) ? s.deployBtnDisabled : ''}`}
+                          disabled={isErrorState(row.state)}
+                          onClick={() => alert(`Desplegando ${row.name}…`)}
+                        >
+                          <IconRocket size={13} /> Desplegar
+                        </button>
+                        <button
+                          className={`${s.iconAction} ${s.iconActionDanger}`}
+                          onClick={() => setPendingDelete([row.name])}
+                          title={`Eliminar ${row.name}`}
+                          aria-label={`Eliminar ${row.name}`}
+                        >
+                          <IconTrash size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -148,6 +214,13 @@ function ApiProxies() {
           </div>
         )}
       </div>
+
+      <DeleteProxiesModal
+        isOpen={pendingDelete.length > 0}
+        proxies={pendingDelete}
+        onClose={() => setPendingDelete([])}
+        onDeleted={handleDeleted}
+      />
 
       <NewProxyModal
         isOpen={modalOpen}

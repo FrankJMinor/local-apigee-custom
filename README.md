@@ -126,6 +126,40 @@ Se aceptan las dos formas habituales de empaquetado: `apiproxy/...` en la raíz
 del ZIP (formato oficial de Apigee) y `MiProxy/apiproxy/...` (comprimir la
 carpeta del proxy).
 
+### Eliminar proxies desde la tabla
+
+La columna **Acción** incluye un botón de papelera por fila, y cada fila tiene una
+casilla para seleccionar varios proxies a la vez (la casilla de la cabecera marca
+todo lo que el filtro tiene a la vista). Con uno o más seleccionados aparece
+**Eliminar (N)** junto al contador. En ambos casos se pide confirmación con la
+lista exacta de lo que se va a borrar.
+
+El emulador no expone un borrado por proxy: su runtime se deriva del workspace, así
+que el backend saca los proxies de `src/main/apigee/apiproxies/`, los desregistra
+del `deployments.json` y **redespliega**. Ahí es donde dejan de existir dentro del
+contenedor. El borrado en bloque genera **una sola revisión**, no una por proxy.
+
+Si el emulador rechaza el contrato resultante, todos los proxies se restauran y no
+se elimina nada.
+
+| Método   | Ruta                                          | Uso                              |
+|----------|-----------------------------------------------|----------------------------------|
+| `DELETE` | `/v1/organizations/{org}/apis/{proxy}`        | Elimina un proxy (estilo Apigee) |
+| `POST`   | `/v1/proxies/delete`                          | Elimina varios con un despliegue |
+
+### Nombres de proxy y mayúsculas
+
+Apigee distingue mayúsculas en los nombres de proxy, pero el workspace vive en el
+sistema de archivos del usuario, que en Windows y macOS **no**: `helloWorld` y
+`HelloWorld` son la misma carpeta. Por eso toda operación sobre un proxy existente
+resuelve antes su nombre real con `bundles.resolve_proxy_name()`.
+
+Comparar los nombres directamente hace creer que un proxy no existe, y a partir de
+ahí una importación escribe sobre el proxy equivocado y su rollback lo borra. Si
+importas un nombre que solo difiere en mayúsculas de uno existente, la operación se
+rechaza explicando el conflicto en lugar de sobrescribir.
+
+
 ### Guardar y desplegar desde el editor (botón Save)
 
 En el detalle de un proxy, **Save** persiste lo editado (XML de políticas,

@@ -22,6 +22,11 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
 - Chip de estado en la cabecera: `● Active` → `Deploying…` (ámbar, con pulso) → `● Active`,
   o `● Deploy failed` con un banner que muestra el archivo y la línea que reporta el emulador.
 - Botón **Deploy**: redespliega el workspace tal como está en disco, sin escribir archivos.
+- Eliminación de proxies desde la tabla: botón de papelera por fila y selección múltiple
+  con casillas (la de la cabecera marca lo visible tras el filtro). Pide confirmación con
+  la lista exacta y borra del workspace y del runtime del emulador.
+- `DELETE /v1/organizations/{org}/apis/{proxy}` y `POST /v1/proxies/delete`: el borrado en
+  bloque genera una sola revisión, y si el emulador rechaza el contrato todo se restaura.
 
 ### Cambiado
 - `docker-compose.yml`: el servicio `backend-api` monta ahora `./src` completo en
@@ -29,6 +34,11 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
   sharedflows al desplegar.
 
 ### Corrección
+- Los nombres de proxy se comparaban distinguiendo mayúsculas, pero el workspace vive en un
+  sistema de archivos que no las distingue. Importar `helloWorld` con `HelloWorld` existente
+  escribía sobre su carpeta y, al fallar el despliegue, el rollback la borraba entera. Ahora
+  el nombre real se resuelve con `bundles.resolve_proxy_name()` antes de escribir o borrar, y
+  un choque de mayúsculas se rechaza explicándolo.
 - La revisión activa y el árbol de archivos se tomaban de la carpeta numérica más alta de
   `sdlc/contracts/`. Un despliegue que falla al compilar deja igualmente su carpeta ahí, así
   que la UI mostraba —y dejaba editar— archivos de un contrato rechazado. Ahora se resuelve

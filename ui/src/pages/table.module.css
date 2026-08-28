@@ -198,3 +198,50 @@
   color: var(--text-muted);
   padding: 3em 0;
 }
+
+/* ── Selección múltiple y acciones destructivas ── */
+.tableBarRight {
+  display: flex;
+  align-items: center;
+  gap: 0.9em;
+}
+
+.btnDanger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  font-size: 0.84em;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.btnDanger:hover { background: rgba(239, 68, 68, 0.18); }
+
+.checkCell {
+  width: 42px;
+  padding-right: 0 !important;
+  text-align: center;
+}
+
+.checkbox {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--accent);
+  vertical-align: middle;
+}
+.checkbox:disabled { cursor: not-allowed; opacity: 0.4; }
+
+.table tbody tr.rowSelected td { background: var(--bg-row-hover); }
+
+.actionCell {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+}

@@ -105,11 +105,13 @@ class ApigeeOrganizationApisView(APIView):
             # El contrato no se activó: devolvemos el workspace a su estado previo.
             logger.error(f"Despliegue fallido de '{proxy_name}', revirtiendo: {exc}")
             bundles.remove_bundle(proxy_name)
+            bundles.unregister_deployment(proxy_name, environment)
 
             if backup:
-                bundles.restore_bundle(backup, proxy_name)
-            else:
-                bundles.unregister_deployment(proxy_name, environment)
+                # Puede diferir en mayúsculas del nombre pedido: restauramos el real.
+                previous = metadata.get("replacedName") or proxy_name
+                bundles.restore_bundle(backup, previous)
+                bundles.register_deployment(previous, environment)
 
             return Response(
                 {"error": exc.message, "detail": exc.detail, "proxy": proxy_name},
@@ -515,3 +517,119 @@ class ProxyFileUpdateView(APIView):
                 "revision": revision,
             }
         )
+
+
+def _delete_and_deploy(proxy_names, environment):
+    """Saca los proxies del workspace y redespliega; revierte si el emulador falla.
+
+    Devuelve la tupla (payload, http_status) lista para responder.
+    """
+    try:
+        deleted, missing, backups = bundles.delete_proxy_bundles(proxy_names, environment)
+    except bundles.BundleError as exc:
+        return {"error": str(exc)}, status.HTTP_400_BAD_REQUEST
+
+    if not deleted:
+        return (
+            {
+                "error": "Ninguno de los proxies indicados existe en el workspace.",
+                "notFound": missing,
+            },
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    try:
+        # El emulador no expone un borrado por proxy: su runtime se deriva del
+        # workspace, así que redesplegar sin ellos es lo que los saca del contenedor.
+        deployment = emulator.deploy_workspace(environment)
+    except emulator.EmulatorError as exc:
+        logger.error(f"Despliegue fallido tras borrar {deleted}, revirtiendo: {exc}")
+        bundles.restore_deleted_bundles(backups, environment)
+
+        return (
+            {
+                "error": exc.message,
+                "detail": exc.detail,
+                "proxies": deleted,
+                "reverted": True,
+            },
+            status.HTTP_502_BAD_GATEWAY,
+        )
+
+    for backup in backups.values():
+        bundles.discard_backup(backup)
+
+    revision = str(deployment.get("revision") or get_current_revision() or "1")
+    logger.info(f"Proxies {deleted} eliminados; emulador en la revisión {revision}")
+
+    return (
+        {
+            "deleted": deleted,
+            "notFound": missing,
+            "environment": environment,
+            "revision": revision,
+        },
+        status.HTTP_200_OK,
+    )
+
+
+# Esta clase replica el borrado de un proxy de Apigee y lo propaga al emulador.
+class ApigeeProxyDetailView(APIView):
+    """Elimina un proxy del workspace y del runtime del emulador."""
+
+    @extend_schema(
+        summary="Elimina un API proxy",
+        description=(
+            "Réplica local de `DELETE /v1/organizations/{org}/apis/{api}`. Saca el proxy "
+            "de `src/main/apigee/apiproxies/`, lo desregistra del `deployments.json` y "
+            "redespliega para que desaparezca del contenedor del emulador. Si el "
+            "despliegue falla, el proxy vuelve a su sitio."
+        ),
+        responses={200: dict, 400: dict, 404: dict, 502: dict},
+    )
+    def delete(self, request, org, proxy_name):
+        environment = request.query_params.get("environment") or settings.APIGEE_ENVIRONMENT
+        payload, code = _delete_and_deploy([proxy_name], environment)
+        return Response(payload, status=code)
+
+
+# Esta clase permite borrar varios proxies con un solo despliegue, que es lo que
+# necesita la selección múltiple de la tabla.
+class ProxyBulkDeleteView(APIView):
+    """Elimina varios proxies a la vez con un único redespliegue."""
+
+    @extend_schema(
+        summary="Elimina varios API proxies",
+        description=(
+            "Borra en bloque y redespliega una sola vez, en lugar de generar una "
+            "revisión por proxy. Si el emulador rechaza el contrato resultante, todos "
+            "los proxies se restauran."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "proxies": {"type": "array", "items": {"type": "string"}},
+                    "environment": {"type": "string"},
+                },
+                "required": ["proxies"],
+            }
+        },
+        responses={200: dict, 400: dict, 404: dict, 502: dict},
+    )
+    def post(self, request):
+        payload = request.data if isinstance(request.data, dict) else {}
+        proxies = payload.get("proxies")
+
+        if not isinstance(proxies, list) or not proxies:
+            return Response(
+                {
+                    "error": "No se recibió ningún proxy que eliminar.",
+                    "detail": "Envía 'proxies': ['NombreA', 'NombreB'].",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        environment = payload.get("environment") or settings.APIGEE_ENVIRONMENT
+        body, code = _delete_and_deploy(proxies, environment)
+        return Response(body, status=code)
