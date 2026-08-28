@@ -25,6 +25,8 @@ from drf_spectacular.views import (
 from APIs.views import (
     ApigeeOrganizationApisView,
     ApigeePolicyMenuView,
+    EmulatorDeployView,
+    EmulatorStatusView,
     ProxyDeployedListView,
     ProxyFileListView,
     SharedFlowDeployedListView,
@@ -33,7 +35,12 @@ from APIs.views import (
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    # GET lista los proxies del emulador; POST importa un bundle ZIP y lo despliega
     path("v1/organizations/<str:org>/apis", ApigeeOrganizationApisView.as_view()),
+    # Redespliegue del workspace completo (equivalente al "Deploy" de Cloud Code)
+    path("v1/emulator/deploy", EmulatorDeployView.as_view()),
+    # Estado vivo del emulador: versión y endpoints enrutados
+    path("v1/emulator/status", EmulatorStatusView.as_view()),
     # Ruta para listar proxies desplegados (sin detalles de archivos)
     path("v1/proxies/deployed", ProxyDeployedListView.as_view()),
     # Rutas para operaciones de archivos dentro de un proxy específico

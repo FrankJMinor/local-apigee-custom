@@ -6,10 +6,14 @@ import os
 import socket
 from datetime import datetime
 
+from django.conf import settings
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from . import bundles, emulator
 from .services import (
     get_latest_revision_path,
     get_list_shared_flows,
@@ -21,11 +25,116 @@ from .utility import ApigeeTemplateService
 logger = logging.getLogger(__name__)
 
 
+def _as_bool(value) -> bool:
+    """Interpreta los valores que envían los formularios HTML como booleanos."""
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 class ApigeeOrganizationApisView(APIView):
     """
     Simula el endpoint oficial de Apigee: /v1/organizations/{org}/apis
     Mapea el estado real del emulador a la estructura compleja que espera la UI.
     """
+
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(
+        summary="Importa un bundle de proxy y lo despliega en el emulador",
+        description=(
+            "Réplica local de `POST /v1/organizations/{org}/apis?action=import&name={name}`.\n\n"
+            "Recibe el ZIP del bundle (con la carpeta `apiproxy/` en la raíz), lo valida, "
+            "lo escribe en el workspace `src/main/apigee/apiproxies/<name>`, lo registra en "
+            "`deployments.json` y dispara el despliegue en el emulador. Si el emulador "
+            "rechaza el contrato, el workspace se deja como estaba."
+        ),
+        parameters=[
+            OpenApiParameter("action", str, description="Compatibilidad con Apigee: `import`."),
+            OpenApiParameter("name", str, description="Nombre del proxy a crear."),
+            OpenApiParameter("overwrite", bool, description="Reemplaza un proxy existente."),
+        ],
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string", "format": "binary"},
+                    "name": {"type": "string"},
+                    "environment": {"type": "string"},
+                    "overwrite": {"type": "boolean"},
+                },
+                "required": ["file"],
+            }
+        },
+        responses={201: dict, 400: dict, 502: dict},
+    )
+    def post(self, request, org):
+        upload = request.FILES.get("file") or request.FILES.get("bundle")
+
+        if upload is None:
+            return Response(
+                {
+                    "error": "Falta el archivo del bundle.",
+                    "detail": "Envía el ZIP en el campo 'file' de un formulario multipart.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # El nombre puede llegar por query string (como en Apigee) o en el formulario.
+        raw_name = request.query_params.get("name") or request.data.get("name") or ""
+        if not raw_name:
+            raw_name = os.path.splitext(os.path.basename(upload.name or ""))[0]
+
+        environment = request.data.get("environment") or settings.APIGEE_ENVIRONMENT
+        overwrite = _as_bool(
+            request.query_params.get("overwrite") or request.data.get("overwrite") or False
+        )
+
+        try:
+            metadata, backup = bundles.import_proxy_bundle(
+                upload.read(), raw_name, environment=environment, overwrite=overwrite
+            )
+        except bundles.BundleError as exc:
+            logger.warning(f"Bundle rechazado para '{raw_name}': {exc}")
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        proxy_name = metadata["name"]
+
+        try:
+            deployment = emulator.deploy_workspace(environment)
+        except emulator.EmulatorError as exc:
+            # El contrato no se activó: devolvemos el workspace a su estado previo.
+            logger.error(f"Despliegue fallido de '{proxy_name}', revirtiendo: {exc}")
+            bundles.remove_bundle(proxy_name)
+
+            if backup:
+                bundles.restore_bundle(backup, proxy_name)
+            else:
+                bundles.unregister_deployment(proxy_name, environment)
+
+            return Response(
+                {"error": exc.message, "detail": exc.detail, "proxy": proxy_name},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        bundles.discard_backup(backup)
+        revision = str(deployment.get("revision", "1"))
+        logger.info(f"Proxy '{proxy_name}' desplegado en la revisión {revision} de {org}")
+
+        return Response(
+            {
+                "name": proxy_name,
+                "organization": org,
+                "environment": environment,
+                "revision": revision,
+                "basepaths": metadata["basepaths"],
+                "proxies": metadata["proxy_endpoints"],
+                "targets": metadata["target_endpoints"],
+                "policies": metadata["policies"],
+                "replaced": metadata["replaced"],
+                "declaredName": metadata["declared_name"],
+                "files": metadata["files"],
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
     def get(self, request, org):
         # 1. Obtener datos del entorno real
@@ -249,3 +358,45 @@ class ApigeePolicyMenuView(APIView):
         service = ApigeeTemplateService()
         data = service.generate_menu_json()
         return Response(data)
+
+
+# Esta clase expone el despliegue del workspace completo hacia el emulador,
+# equivalente al botón "Deploy" de la extensión Cloud Code de VS Code.
+class EmulatorDeployView(APIView):
+    """Empaqueta `src/main/apigee` y lo activa como una revisión nueva del emulador."""
+
+    @extend_schema(
+        summary="Despliega el workspace local en el emulador",
+        responses={200: dict, 502: dict},
+    )
+    def post(self, request):
+        environment = request.data.get("environment") or settings.APIGEE_ENVIRONMENT
+
+        try:
+            deployment = emulator.deploy_workspace(environment)
+        except emulator.EmulatorError as exc:
+            return Response(
+                {"error": exc.message, "detail": exc.detail},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response({"environment": environment, **deployment})
+
+
+# Esta clase refleja el estado vivo del emulador (versión y endpoints activos),
+# útil para confirmar en la UI que un proxy recién importado quedó enrutado.
+class EmulatorStatusView(APIView):
+    """Versión del emulador y árbol de endpoints actualmente desplegados."""
+
+    @extend_schema(
+        summary="Estado del emulador y endpoints activos",
+        responses={200: dict, 502: dict},
+    )
+    def get(self, request):
+        try:
+            return Response({"version": emulator.get_version(), "tree": emulator.get_tree()})
+        except emulator.EmulatorError as exc:
+            return Response(
+                {"error": exc.message, "detail": exc.detail},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )

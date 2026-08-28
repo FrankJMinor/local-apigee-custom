@@ -101,6 +101,69 @@ Para simular KVMs de la nube, se debe crear el archivo `./environments/apigee-de
 ]
 ```
 
+### Alta de proxies desde la UI (+ Nuevo Proxy)
+
+El botón **+ Nuevo Proxy** de la pantalla *API Proxies* replica el asistente
+*Build a Proxy → Proxy bundle* de la consola de Apigee: se selecciona un ZIP, se
+indica el nombre y el proxy queda desplegado en el emulador sin pasar por VS Code.
+
+**Flujo completo**
+
+1. La UI envía el ZIP a `POST /v1/organizations/{org}/apis?action=import&name={name}`
+   (multipart, campo `file`).
+2. El backend valida el bundle: que sea un ZIP legible, que contenga la carpeta
+   `apiproxy/`, que declare al menos un `ProxyEndpoint` y que su basepath no lo
+   esté usando ya otro proxy.
+3. Escribe el bundle en `src/main/apigee/apiproxies/<name>/apiproxy/` — la
+   *source of truth* que ve VS Code y versiona Git — y lo registra en el
+   `deployments.json` del environment.
+4. Empaqueta todo `src/` y lo envía al emulador; este compila el contrato, crea
+   una revisión nueva y la activa.
+5. Si el emulador rechaza el contrato, el workspace se revierte al estado previo
+   (incluida la versión anterior del proxy cuando se sobrescribe).
+
+Se aceptan las dos formas habituales de empaquetado: `apiproxy/...` en la raíz
+del ZIP (formato oficial de Apigee) y `MiProxy/apiproxy/...` (comprimir la
+carpeta del proxy).
+
+### La API de administración del emulador
+
+El emulador expone una API REST en el **puerto 8080 del contenedor** (publicado
+como `8999` en el host) bajo el prefijo `/v1`. Es la misma que usa la extensión
+Cloud Code al pulsar *Deploy*, y no está documentada públicamente:
+
+| Método   | Ruta                                    | Uso                                                   |
+|----------|-----------------------------------------|-------------------------------------------------------|
+| `POST`   | `/v1/emulator/deploy?environment=<env>` | Recibe un ZIP con `src/main/apigee/...` y lo activa    |
+| `GET`    | `/v1/emulator/tree`                     | Endpoints desplegados y su basepath                   |
+| `GET`    | `/v1/emulator/version`                  | Versión del emulador y environment activo             |
+| `POST`   | `/v1/emulator/reset`                    | Reinicia el estado del emulador                       |
+| `POST`   | `/v1/emulator/trace?proxyName=<proxy>`  | Abre una sesión de trace                              |
+| `GET`    | `/v1/emulator/analytics`                | Registros de analytics                                |
+
+Ojo con los puertos: el `8445` del host es **tráfico** (puerto 8998 interno), no
+administración, pese a lo que sugiere su etiqueta histórica de "control port".
+
+El despliegue no se dispara escribiendo en `sdlc/contracts/`: el emulador no
+vigila ese directorio. Solo el `POST /v1/emulator/deploy` compila y activa el
+contrato; el emulador crea la carpeta de la revisión y borra las anteriores.
+
+**Endpoints propios que expone el backend**
+
+| Método | Ruta                                | Uso                                                        |
+|--------|-------------------------------------|------------------------------------------------------------|
+| `POST` | `/v1/organizations/{org}/apis`      | Importa un bundle ZIP y lo despliega                        |
+| `POST` | `/v1/emulator/deploy`               | Redespliega todo el workspace (equivale al *Deploy* de VS Code) |
+| `GET`  | `/v1/emulator/status`               | Versión del emulador + árbol de endpoints activos          |
+
+Variables de entorno del servicio `backend-api` (ver `docker-compose.yml`):
+
+| Variable               | Valor por defecto          | Descripción                                    |
+|------------------------|----------------------------|------------------------------------------------|
+| `APIGEE_EMULATOR_URL`  | `http://apigee-dev:8080`   | API de administración del emulador             |
+| `APIGEE_ENVIRONMENT`   | `apigee-dev`               | Environment destino de los despliegues         |
+| `APIGEE_SOURCE_ROOT`   | `/app/workspace`           | Carpeta `src` montada desde el host            |
+
 
 
 ## Resumen Técnico: Arquitectura de Doble Backend para Apigee Local

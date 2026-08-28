@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { StatusBadge } from '../components/StatusBadge'
 import { TagChip } from '../components/TagChip'
 import { IconRefresh, IconRocket } from '../components/Icons'
+import { NewProxyModal } from '../components/NewProxyModal'
 import { formatDate } from '../utils/format'
+import { ORGANIZATION } from '../utils/importProxyBundle'
 import { getDotColor, isErrorState } from '../utils/states'
 import s from './table.module.css'
 
-const API_URL = '/v1/organizations/americamovil/apis'
+const API_URL = `/v1/organizations/${ORGANIZATION}/apis`
 
 function parseProxies(data) {
   const proxies = data.aPIProxy || data
@@ -33,6 +35,7 @@ function ApiProxies() {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
   const [search, setSearch]   = useState('')
+  const [modalOpen, setModalOpen] = useState(false)
   const navigate = useNavigate();
 
   const load = useCallback(() => {
@@ -66,7 +69,7 @@ function ApiProxies() {
           <button className={s.btnSecondary} onClick={load}>
             <IconRefresh size={14} /> Actualizar
           </button>
-          <button className={s.btnPrimary}>+ Nuevo Proxy</button>
+          <button className={s.btnPrimary} onClick={() => setModalOpen(true)}>+ Nuevo Proxy</button>
         </div>
       </div>
 
@@ -146,6 +149,15 @@ function ApiProxies() {
         )}
       </div>
 
+      <NewProxyModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onCreated={load}
+        onOpenProxy={proxyName => {
+          setModalOpen(false)
+          navigate(`/proxies/${encodeURIComponent(proxyName)}`)
+        }}
+      />
     </div>
   )
 }

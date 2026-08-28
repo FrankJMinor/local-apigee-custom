@@ -30,11 +30,19 @@ services:
       - TZ=America/Mexico_City
       - DJANGO_SETTINGS_MODULE=core.settings
       - BASE_PROJECT_PATH=/app/apiproxies
+      # API de administración del emulador (puerto 8080 interno del contenedor).
+      # Usamos el container_name porque también existe si lo levanta Cloud Code.
+      - APIGEE_EMULATOR_URL=http://apigee-dev:8080
+      - APIGEE_ENVIRONMENT=apigee-dev
+      # Raíz del workspace: lo que se empaqueta y se envía al emulador al desplegar
+      - APIGEE_SOURCE_ROOT=/app/workspace
     volumes:
       - ./backend:/app
       - apigee_contracts_vol:/apigee_runtime
       # MONTAMOS TUS PROXIES LOCALES (Source of Truth)
       - ./src/main/apigee/apiproxies:/app/apiproxies
+      # WORKSPACE COMPLETO: proxies + sharedflows + environments (necesario para desplegar)
+      - ./src:/app/workspace
     depends_on:
       - apigee-emulator
     networks:

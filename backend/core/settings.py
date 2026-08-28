@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -131,6 +132,27 @@ STATIC_URL = "static/"
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
 ]
+
+# ── Emulador de Apigee ──────────────────────────────────────────────
+# API de administración del emulador (puerto 8080 del contenedor apigee-dev).
+# Es la misma que usa la extensión Cloud Code de VS Code para desplegar.
+APIGEE_EMULATOR_URL = os.environ.get("APIGEE_EMULATOR_URL", "http://apigee-dev:8080")
+
+# Environment activo dentro del emulador (carpeta en src/main/apigee/environments).
+APIGEE_ENVIRONMENT = os.environ.get("APIGEE_ENVIRONMENT", "apigee-dev")
+
+# Raíz del workspace montado desde el host: la carpeta 'src' del repositorio.
+APIGEE_SOURCE_ROOT = os.environ.get("APIGEE_SOURCE_ROOT", "/app/workspace")
+
+# Prefijo con el que el emulador espera encontrar las rutas dentro del ZIP.
+APIGEE_SOURCE_ARCHIVE_PREFIX = "src"
+
+# Compilar y activar un contrato puede tardar varios segundos.
+APIGEE_EMULATOR_TIMEOUT = int(os.environ.get("APIGEE_EMULATOR_TIMEOUT", "120"))
+
+# Los bundles de proxy se suben completos en memoria (por defecto DRF corta en 2.5 MB).
+DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
 
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [

@@ -3,7 +3,22 @@
 Todas las versiones y cambios relevantes del proyecto se documentan aquí siguiendo el formato [SemVer](https://semver.org/lang/es/).
 
 ## [Unreleased]
-- Cambios en desarrollo, aún no lanzados.
+### Agregado
+- Alta de proxies desde la UI: el botón **+ Nuevo Proxy** abre un asistente de 4 pasos
+  (Tipo → Detalles → Construir → Resumen) que replica *Build a Proxy → Proxy bundle*
+  de la consola de Apigee.
+- `POST /v1/organizations/{org}/apis`: importa un bundle ZIP, lo valida, lo escribe en
+  `src/main/apigee/apiproxies/` y lo despliega en el emulador. Revierte el workspace si
+  el emulador rechaza el contrato.
+- `POST /v1/emulator/deploy` y `GET /v1/emulator/status` para redesplegar el workspace y
+  consultar el estado vivo del emulador sin depender de VS Code.
+- Módulos `APIs/emulator.py` (cliente de la API de administración del emulador y
+  empaquetado del workspace) y `APIs/bundles.py` (validación y registro de bundles).
+
+### Cambiado
+- `docker-compose.yml`: el servicio `backend-api` monta ahora `./src` completo en
+  `/app/workspace` (antes solo `apiproxies`), necesario para empaquetar environments y
+  sharedflows al desplegar.
 
 ---
 
