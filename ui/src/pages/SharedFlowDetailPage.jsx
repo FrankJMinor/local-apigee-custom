@@ -22,6 +22,8 @@ import JavascriptSVG from '../../icons/Javascript.svg';
 import JSONToXMLSVG from '../../icons/JSONToXML.svg';
 import KeyValueMapOperationsSVG from '../../icons/KeyValueMapOperations.svg';
 import RaiseFaultSVG from '../../icons/RaiseFault.svg';
+import { saveProxyFiles, deployWorkspace } from '../utils/deployProxy';
+import { ARTIFACT_KINDS } from '../utils/importProxyBundle';
 import styles from '../components/ProxyDetail.module.css';
 import CacheSVG from '../../icons/Cache.svg';
 
@@ -306,6 +308,9 @@ function SharedFlowDetailPage() {
     const [error, setError] = useState(null);
     const [sharedFlow, setSharedFlow] = useState(null);
     const [fileTree, setFileTree] = useState(null);
+    // Estado del despliegue: alimenta el chip de la cabecera (Active / Deploying / Error).
+    const [deployState, setDeployState] = useState('idle');
+    const [deployError, setDeployError] = useState(null);
 
     const [activeTab, setActiveTab] = useState('Develop');
     const [footerHeight, setFooterHeight] = useState(280);
@@ -372,14 +377,14 @@ function SharedFlowDetailPage() {
 
     useEffect(() => {
         setLoading(true);
-        const fetchGeneral = fetch('http://localhost:8446/v1/sharedflows/deployed')
+        const fetchGeneral = fetch('/v1/sharedflows/deployed')
             .then(res => res.json())
             .then(data => {
                 const found = (data.shared_flows || []).find(n => n === sharedFlowName);
                 return found ? { name: found, revision: data.revision || '1' } : { name: sharedFlowName, revision: '1' };
             });
 
-        const fetchFiles = fetch(`http://localhost:8446/v1/sharedflows/${sharedFlowName}/files`)
+        const fetchFiles = fetch(`/v1/sharedflows/${sharedFlowName}/files`)
             .then(res => { if (!res.ok) throw new Error(`Error: ${res.status}`); return res.json(); });
 
         Promise.all([fetchGeneral, fetchFiles])
@@ -429,7 +434,7 @@ function SharedFlowDetailPage() {
             return;
         }
         try {
-            const res = await fetch(`http://localhost:8446/v1/sharedflows/${sharedFlowName}/content?path=${encodeURIComponent(file.path)}`);
+            const res = await fetch(`/v1/sharedflows/${sharedFlowName}/content?path=${encodeURIComponent(file.path)}`);
             const data = await res.json();
             if (data.content) {
                 setXmlCode(data.content);
@@ -465,19 +470,143 @@ function SharedFlowDetailPage() {
         // AGREGAR localFiles aquí es vital para que el icono cargue tras crear la política
     }, [selectedFile, fileCache, fileTree, localFiles]);
 
+    /**
+     * Relee el arbol de archivos tras un guardado.
+     *
+     * Conserva el archivo abierto y solo lo re-apunta a su version recien leida de
+     * disco: recargar la seleccion sacaria al usuario de donde estaba trabajando.
+     */
+    const refreshFileTree = useCallback(() => {
+        fetch(`/v1/sharedflows/${sharedFlowName}/files`)
+            .then(res => res.json())
+            .then(data => {
+                setFileTree(data.files);
+
+                if (data.revision) {
+                    setSharedFlow(prev => (prev ? { ...prev, revision: String(data.revision) } : prev));
+                }
+
+                setSelectedFile(prev => {
+                    if (!prev) return prev;
+                    const refreshed = [
+                        data.files?.root_config,
+                        ...(data.files?.policies || []),
+                        ...(data.files?.shared_flows || []),
+                        ...(data.files?.scripts || []),
+                    ].find(f => f && f.path === prev.path);
+                    return refreshed || prev;
+                });
+            })
+            .catch(e => console.error('Error al refrescar el arbol:', e));
+    }, [sharedFlowName]);
+
+    // Contenido tal como esta en disco, para distinguir lo que realmente cambio.
+    const originalContents = React.useMemo(() => {
+        const map = {};
+        if (!fileTree) return map;
+
+        const collect = (list) => (list || []).forEach(f => { map[f.path] = f.content ?? ''; });
+        if (fileTree.root_config) map[fileTree.root_config.path] = fileTree.root_config.content ?? '';
+        collect(fileTree.policies);
+        collect(fileTree.shared_flows);
+        collect(fileTree.scripts);
+        return map;
+    }, [fileTree]);
+
+    /**
+     * Reune todo lo pendiente de guardar: archivos editados y los creados en la
+     * sesion (politicas y recursos nuevos), que aun no existen en disco.
+     */
+    const collectDirtyFiles = useCallback(() => {
+        const pending = new Map();
+
+        const consider = (path, content) => {
+            if (!path || content === undefined || content === null) return;
+            if (originalContents[path] === content) return; // sin cambios respecto a disco
+            pending.set(path, { path, content });
+        };
+
+        // El buffer del editor manda sobre la cache para el archivo abierto.
+        if (selectedFile) consider(selectedFile.path, xmlCode);
+
+        Object.entries(fileCache).forEach(([path, content]) => {
+            if (selectedFile && path === selectedFile.path) return;
+            consider(path, content);
+        });
+
+        [...(localFiles || []), ...(localScripts || [])].forEach(file => {
+            if (pending.has(file.path) || originalContents[file.path] !== undefined) return;
+            consider(file.path, fileCache[file.path] ?? file.content);
+        });
+
+        return Array.from(pending.values());
+    }, [selectedFile, xmlCode, fileCache, localFiles, localScripts, originalContents]);
+
+    const hasPendingChanges = collectDirtyFiles().length > 0;
+
+    /**
+     * Escribe los archivos en el workspace y despliega la revision resultante.
+     * Si el emulador rechaza el contrato, el backend revierte lo escrito.
+     */
+    const persistAndDeploy = async (files) => {
+        if (!files.length) return null;
+
+        setIsSaving(true);
+        setDeployState('deploying');
+        setDeployError(null);
+
+        try {
+            const result = await saveProxyFiles({
+                proxyName: sharedFlowName,
+                files,
+                kind: ARTIFACT_KINDS.sharedflow,
+            });
+
+            if (result?.revision) {
+                setSharedFlow(prev => (prev ? { ...prev, revision: String(result.revision) } : prev));
+            }
+            setDeployState('idle');
+            refreshFileTree();
+            return result;
+        } catch (e) {
+            setDeployState('error');
+            setDeployError(e.message);
+            return null;
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // Guardado desde el editor: solo el archivo abierto.
     const handleSave = async () => {
         if (!selectedFile) return;
-        setIsSaving(true);
+        await persistAndDeploy([{ path: selectedFile.path, content: xmlCode }]);
+    };
+
+    // Guardado desde la cabecera: todo lo pendiente en la sesion.
+    const handleSaveAll = async () => {
+        const files = collectDirtyFiles();
+        if (!files.length) {
+            setDeployError(null);
+            return;
+        }
+        await persistAndDeploy(files);
+    };
+
+    // Redespliegue sin escribir archivos, para reactivar el contrato actual.
+    const handleDeploy = async () => {
+        setDeployState('deploying');
+        setDeployError(null);
         try {
-            const res = await fetch(`http://localhost:8446/v1/sharedflows/${sharedFlowName}/update`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: selectedFile.path, content: xmlCode })
-            });
-            if (!res.ok) throw new Error('Error al guardar');
-            selectedFile.content = xmlCode;
-            alert('Guardado correctamente');
-        } catch (e) { alert(e.message); } finally { setIsSaving(false); }
+            const result = await deployWorkspace();
+            if (result?.revision) {
+                setSharedFlow(prev => (prev ? { ...prev, revision: String(result.revision) } : prev));
+            }
+            setDeployState('idle');
+        } catch (e) {
+            setDeployState('error');
+            setDeployError(e.message);
+        }
     };
 
     const handleDropPolicy = (policy, target, index) => {
@@ -719,13 +848,55 @@ function SharedFlowDetailPage() {
                 </div>
                 <div className={styles.headerActions}>
                     <div className={styles.revIndicator}><span className={styles.revLabel}>Revision</span><span className={styles.revValue}>{sharedFlow.revision}</span></div>
-                    <div className={styles.statusChip}>● Active</div>
+                    <div
+                        className={`${styles.statusChip} ${deployState === 'deploying' ? styles.statusChipDeploying : ''} ${deployState === 'error' ? styles.statusChipError : ''}`}
+                        title={deployError || undefined}
+                    >
+                        {deployState === 'deploying' && <><span className={styles.statusPulse} /> Deploying…</>}
+                        {deployState === 'error' && <>● Deploy failed</>}
+                        {deployState === 'idle' && <>● Active</>}
+                    </div>
                     <div className={styles.actionGroup}>
-                        <button className={styles.btnSave} onClick={handleSave}><IconEdit size={14} /> Save</button>
-                        <button className={styles.btnDeploy} onClick={handleSave}><IconRocket size={14} /> Deploy</button>
+                        <button
+                            className={styles.btnSave}
+                            onClick={handleSaveAll}
+                            disabled={deployState === 'deploying' || !hasPendingChanges}
+                            title={hasPendingChanges ? 'Guardar cambios y desplegar' : 'No hay cambios pendientes'}
+                        >
+                            <IconEdit size={14} /> Save{hasPendingChanges ? ' •' : ''}
+                        </button>
+                        <button
+                            className={styles.btnDeploy}
+                            onClick={handleDeploy}
+                            disabled={deployState === 'deploying'}
+                            title="Redesplegar el workspace en el emulador"
+                        >
+                            <IconRocket size={14} /> Deploy
+                        </button>
                     </div>
                 </div>
             </header>
+
+            {/* El emulador reporta archivo y linea del XML que fallo: merece verse completo */}
+            {deployError && (
+                <div className={styles.deployErrorBar}>
+                    <div className={styles.deployErrorBody}>
+                        <strong>El emulador rechazó el despliegue.</strong>
+                        <span className={styles.deployErrorHint}>
+                            Tus archivos se restauraron al último estado válido.
+                        </span>
+                        <pre className={styles.deployErrorDetail}>{deployError}</pre>
+                    </div>
+                    <button
+                        className={styles.deployErrorClose}
+                        onClick={() => { setDeployError(null); setDeployState('idle'); }}
+                        aria-label="Cerrar error"
+                    >
+                        <IconX size={16} />
+                    </button>
+                </div>
+            )}
+
             <nav className={styles.navTabs}>
                 {['Develop', 'Trace'].map(tab => (
                     <button key={tab} className={`${styles.navTab} ${activeTab === tab ? styles.activeTab : ''}`} onClick={() => setActiveTab(tab)}>

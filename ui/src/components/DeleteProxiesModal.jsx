@@ -2,15 +2,17 @@ import { useState, useEffect } from 'react'
 import PropTypes from 'prop-types'
 import { IconX, IconTrash, IconWarning } from './Icons'
 import { deleteProxies } from '../utils/deleteProxies'
+import { ARTIFACT_KINDS } from '../utils/importProxyBundle'
 import s from './DeleteProxiesModal.module.css'
 
 /**
- * Confirmación de borrado de proxies.
+ * Confirmación de borrado de proxies o shared flows.
  *
  * Eliminar toca el workspace versionado en Git y el runtime del emulador, así que
  * se pide confirmación explícita y se enumera exactamente lo que se va a borrar.
  */
-export function DeleteProxiesModal({ isOpen, proxies, onClose, onDeleted }) {
+export function DeleteProxiesModal({ isOpen, proxies, onClose, onDeleted, kind = ARTIFACT_KINDS.proxy }) {
+  const { labels } = kind
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -36,7 +38,7 @@ export function DeleteProxiesModal({ isOpen, proxies, onClose, onDeleted }) {
     setBusy(true)
     setError(null)
     try {
-      const result = await deleteProxies(proxies)
+      const result = await deleteProxies(proxies, kind)
       onDeleted?.(result)
       onClose()
     } catch (e) {
@@ -53,7 +55,9 @@ export function DeleteProxiesModal({ isOpen, proxies, onClose, onDeleted }) {
           <div className={s.headerIcon}><IconWarning size={18} /></div>
           <div>
             <div className={s.title}>
-              {many ? `Eliminar ${proxies.length} proxies` : 'Eliminar proxy'}
+              {many
+                ? `Eliminar ${proxies.length} ${labels.many}`
+                : `Eliminar ${labels.one}`}
             </div>
             <div className={s.subtitle}>Esta acción no se puede deshacer desde la UI.</div>
           </div>
@@ -64,7 +68,7 @@ export function DeleteProxiesModal({ isOpen, proxies, onClose, onDeleted }) {
 
         <div className={s.body}>
           <p className={s.lead}>
-            {many ? 'Se eliminarán estos proxies:' : 'Se eliminará este proxy:'}
+            {many ? `Se eliminarán estos ${labels.many}:` : `Se eliminará este ${labels.one}:`}
           </p>
 
           <ul className={s.list}>
@@ -72,9 +76,9 @@ export function DeleteProxiesModal({ isOpen, proxies, onClose, onDeleted }) {
           </ul>
 
           <p className={s.note}>
-            Se borran de <code>src/main/apigee/apiproxies/</code>, se desregistran del
+            Se borran de <code>{kind.workspaceDir}</code>, se desregistran del
             environment y se redespliega el emulador para que dejen de existir en el
-            contenedor. Si tienes el proxy versionado en Git, podrás recuperarlo desde ahí.
+            contenedor. Si lo tienes versionado en Git, podrás recuperarlo desde ahí.
           </p>
 
           {error && (
@@ -83,7 +87,7 @@ export function DeleteProxiesModal({ isOpen, proxies, onClose, onDeleted }) {
                 {error.message}
                 {error.reverted && (
                   <span className={s.errorHint}>
-                    Los proxies se restauraron: no se eliminó nada.
+                    {`Los ${labels.many} se restauraron: no se eliminó nada.`}
                   </span>
                 )}
               </span>
@@ -109,6 +113,7 @@ DeleteProxiesModal.propTypes = {
   proxies: PropTypes.arrayOf(PropTypes.string).isRequired,
   onClose: PropTypes.func.isRequired,
   onDeleted: PropTypes.func,
+  kind: PropTypes.object,
 }
 
 export default DeleteProxiesModal

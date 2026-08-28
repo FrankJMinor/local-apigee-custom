@@ -27,13 +27,28 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
   la lista exacta y borra del workspace y del runtime del emulador.
 - `DELETE /v1/organizations/{org}/apis/{proxy}` y `POST /v1/proxies/delete`: el borrado en
   bloque genera una sola revisión, y si el emulador rechaza el contrato todo se restaura.
+- Shared flows con el mismo ciclo que los proxies: alta por bundle desde **+ Nuevo Flow**,
+  guardado + despliegue desde el editor con chip de estado, y borrado individual o múltiple
+  desde la tabla.
+- `POST /v1/organizations/{org}/sharedflows`, `POST /v1/sharedflows/{flow}/update`,
+  `DELETE /v1/organizations/{org}/sharedflows/{flow}` y `POST /v1/sharedflows/delete`.
 
 ### Cambiado
+- `APIs/bundles.py` pasa a estar parametrizado por `ArtifactKind`: proxies y shared flows
+  comparten implementación en lugar de duplicarla. Los modales de alta y borrado de la UI
+  reciben el tipo por prop.
 - `docker-compose.yml`: el servicio `backend-api` monta ahora `./src` completo en
   `/app/workspace` (antes solo `apiproxies`), necesario para empaquetar environments y
   sharedflows al desplegar.
 
 ### Corrección
+- El árbol de archivos de un shared flow se leía desde la carpeta del flow y no desde
+  `sharedflowbundle/`, así que devolvía rutas con el prefijo del bundle. Al guardar, esa
+  ruta se resolvía otra vez dentro del bundle y creaba
+  `sharedflowbundle/sharedflowbundle/...`: la edición nunca llegaba al archivo real. Ahora
+  el árbol es relativo a la raíz del bundle y el guardado descarta el prefijo si viene.
+- `POST /v1/sharedflows/{flow}/update` no existía: el botón de guardar del editor de shared
+  flows devolvía 404 en silencio.
 - Los nombres de proxy se comparaban distinguiendo mayúsculas, pero el workspace vive en un
   sistema de archivos que no las distingue. Importar `helloWorld` con `HelloWorld` existente
   escribía sobre su carpeta y, al fallar el despliegue, el rollback la borraba entera. Ahora

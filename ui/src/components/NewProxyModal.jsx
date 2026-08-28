@@ -1,39 +1,55 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import PropTypes from 'prop-types'
 import { IconX, IconUpload, IconCheck } from './Icons'
-import { importProxyBundle } from '../utils/importProxyBundle'
+import { importProxyBundle, ARTIFACT_KINDS } from '../utils/importProxyBundle'
 import s from './NewProxyModal.module.css'
 
 const STEPS = ['Tipo', 'Detalles', 'Construir', 'Resumen']
 
 // Mismo catálogo que muestra el asistente "Build a Proxy" de Apigee. Por ahora
 // el emulador local solo admite la importación de bundles ya construidos.
-const PROXY_TYPES = [
-  {
-    id: 'reverse',
-    name: 'Reverse proxy (el más común)',
-    desc: 'Enruta las peticiones entrantes hacia un servicio backend.',
-    enabled: false,
-  },
-  {
-    id: 'soap',
-    name: 'SOAP service',
-    desc: 'Crea un proxy REST o pass-through para un servicio SOAP.',
-    enabled: false,
-  },
-  {
-    id: 'notarget',
-    name: 'No Target',
-    desc: 'Crea un proxy simple que no enruta a ningún backend.',
-    enabled: false,
-  },
-  {
-    id: 'bundle',
-    name: 'Proxy bundle',
-    desc: 'Importa un proxy existente desde un archivo ZIP.',
-    enabled: true,
-  },
-]
+const TYPES_BY_KIND = {
+  proxy: [
+    {
+      id: 'reverse',
+      name: 'Reverse proxy (el más común)',
+      desc: 'Enruta las peticiones entrantes hacia un servicio backend.',
+      enabled: false,
+    },
+    {
+      id: 'soap',
+      name: 'SOAP service',
+      desc: 'Crea un proxy REST o pass-through para un servicio SOAP.',
+      enabled: false,
+    },
+    {
+      id: 'notarget',
+      name: 'No Target',
+      desc: 'Crea un proxy simple que no enruta a ningún backend.',
+      enabled: false,
+    },
+    {
+      id: 'bundle',
+      name: 'Proxy bundle',
+      desc: 'Importa un proxy existente desde un archivo ZIP.',
+      enabled: true,
+    },
+  ],
+  sharedflow: [
+    {
+      id: 'blank',
+      name: 'Shared flow vacío',
+      desc: 'Crea un shared flow sin políticas para empezar desde cero.',
+      enabled: false,
+    },
+    {
+      id: 'bundle',
+      name: 'Shared flow bundle',
+      desc: 'Importa un shared flow existente desde un archivo ZIP.',
+      enabled: true,
+    },
+  ],
+}
 
 // Misma restricción que aplica la consola de Apigee al nombre del proxy.
 const NAME_PATTERN = /^[A-Za-z0-9_-]+$/
@@ -48,7 +64,9 @@ const INITIAL = {
   result: null,
 }
 
-export function NewProxyModal({ isOpen, onClose, onCreated, onOpenProxy }) {
+export function NewProxyModal({ isOpen, onClose, onCreated, onOpenProxy, kind = ARTIFACT_KINDS.proxy }) {
+  const { labels } = kind
+  const PROXY_TYPES = TYPES_BY_KIND[kind.key]
   const [state, setState] = useState(INITIAL)
   const [busy, setBusy] = useState(false)
   const fileInputRef = useRef(null)
@@ -97,7 +115,7 @@ export function NewProxyModal({ isOpen, onClose, onCreated, onOpenProxy }) {
     setBusy(true)
     patch({ error: null })
     try {
-      const data = await importProxyBundle({ file, name, overwrite })
+      const data = await importProxyBundle({ file, name, overwrite, kind })
       patch({ step: 3, result: data, error: null })
       onCreated?.(data)
     } catch (err) {
@@ -114,11 +132,11 @@ export function NewProxyModal({ isOpen, onClose, onCreated, onOpenProxy }) {
 
   return (
     <div className={s.overlay} onMouseDown={e => { if (e.target === e.currentTarget && !busy) onClose() }}>
-      <div className={s.modal} role="dialog" aria-modal="true" aria-label="Nuevo API Proxy">
+      <div className={s.modal} role="dialog" aria-modal="true" aria-label={labels.titleNew}>
         <div className={s.header}>
           <div>
-            <div className={s.title}>Nuevo API Proxy</div>
-            <div className={s.subtitle}>Carga un bundle y despliégalo en el emulador local.</div>
+            <div className={s.title}>{labels.titleNew}</div>
+            <div className={s.subtitle}>{labels.subtitleNew}</div>
           </div>
           <button className={s.closeBtn} onClick={onClose} disabled={busy} aria-label="Cerrar">
             <IconX size={18} />
@@ -139,7 +157,7 @@ export function NewProxyModal({ isOpen, onClose, onCreated, onOpenProxy }) {
         <div className={s.body}>
           {step === 0 && (
             <>
-              <p className={s.sectionLead}>Elige cómo quieres construir tu API proxy.</p>
+              <p className={s.sectionLead}>{labels.lead}</p>
               <div className={s.typeList}>
                 {PROXY_TYPES.map(option => (
                   <button
@@ -165,7 +183,7 @@ export function NewProxyModal({ isOpen, onClose, onCreated, onOpenProxy }) {
 
           {step === 1 && (
             <>
-              <p className={s.sectionLead}>Especifica los detalles del proxy.</p>
+              <p className={s.sectionLead}>{`Especifica los detalles del ${labels.one}.`}</p>
 
               <div className={s.field}>
                 <label className={s.label}>
@@ -191,13 +209,13 @@ export function NewProxyModal({ isOpen, onClose, onCreated, onOpenProxy }) {
                   />
                 </div>
                 <p className={s.hint}>
-                  El ZIP debe contener la carpeta <code>apiproxy/</code> en su raíz.
+                  El ZIP debe contener la carpeta <code>{kind.bundleRoot}</code> en su raíz.
                 </p>
               </div>
 
               <div className={s.field}>
                 <label className={s.label} htmlFor="proxy-name">
-                  Proxy Name<span className={s.required}>*</span>
+                  {labels.nameField}<span className={s.required}>*</span>
                 </label>
                 <input
                   id="proxy-name"
@@ -217,19 +235,19 @@ export function NewProxyModal({ isOpen, onClose, onCreated, onOpenProxy }) {
                   checked={overwrite}
                   onChange={e => patch({ overwrite: e.target.checked })}
                 />
-                Sobrescribir si ya existe un proxy con ese nombre
+                {`Sobrescribir si ya existe un ${labels.one} con ese nombre`}
               </label>
             </>
           )}
 
           {step === 2 && (
             <>
-              <p className={s.sectionLead}>Todo listo para construir tu API proxy.</p>
+              <p className={s.sectionLead}>{`Todo listo para construir tu ${labels.one}.`}</p>
               <div className={s.summaryGrid}>
-                <span className={s.summaryLabel}>Proxy Name</span>
+                <span className={s.summaryLabel}>{labels.nameField}</span>
                 <span className={s.summaryValue}>{name}</span>
-                <span className={s.summaryLabel}>Proxy Type</span>
-                <span className={s.summaryValue}>Proxy bundle</span>
+                <span className={s.summaryLabel}>Tipo</span>
+                <span className={s.summaryValue}>{labels.typeName}</span>
                 <span className={s.summaryLabel}>Zip Bundle</span>
                 <span className={s.summaryValue}>{file?.name}</span>
                 <span className={s.summaryLabel}>Sobrescribir</span>
@@ -250,7 +268,7 @@ export function NewProxyModal({ isOpen, onClose, onCreated, onOpenProxy }) {
           {step === 3 && result && (
             <>
               <div className={s.successBanner}>
-                <IconCheck size={16} /> Proxy importado y desplegado
+                <IconCheck size={16} /> {labels.successTitle}
               </div>
               <p className={s.resultText}>
                 Abrir{' '}
@@ -264,10 +282,14 @@ export function NewProxyModal({ isOpen, onClose, onCreated, onOpenProxy }) {
                 <span className={s.summaryValue}>v{result.revision}</span>
                 <span className={s.summaryLabel}>Environment</span>
                 <span className={s.summaryValue}>{result.environment}</span>
-                <span className={s.summaryLabel}>Basepaths</span>
-                <span className={s.summaryValue}>{result.basepaths?.join(', ') || '—'}</span>
-                <span className={s.summaryLabel}>Endpoints</span>
-                <span className={s.summaryValue}>{result.proxies?.join(', ') || '—'}</span>
+                {kind.key === 'proxy' && (
+                  <>
+                    <span className={s.summaryLabel}>Basepaths</span>
+                    <span className={s.summaryValue}>{result.basepaths?.join(', ') || '—'}</span>
+                  </>
+                )}
+                <span className={s.summaryLabel}>{kind.key === 'proxy' ? 'Endpoints' : 'Flows'}</span>
+                <span className={s.summaryValue}>{(result.proxies || result.flows)?.join(', ') || '—'}</span>
                 <span className={s.summaryLabel}>Políticas</span>
                 <span className={s.summaryValue}>{result.policies?.join(', ') || '—'}</span>
               </div>
@@ -312,6 +334,7 @@ NewProxyModal.propTypes = {
   onClose: PropTypes.func.isRequired,
   onCreated: PropTypes.func,
   onOpenProxy: PropTypes.func,
+  kind: PropTypes.object,
 }
 
 export default NewProxyModal

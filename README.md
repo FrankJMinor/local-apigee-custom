@@ -126,6 +126,48 @@ Se aceptan las dos formas habituales de empaquetado: `apiproxy/...` en la raíz
 del ZIP (formato oficial de Apigee) y `MiProxy/apiproxy/...` (comprimir la
 carpeta del proxy).
 
+### Shared flows: mismo ciclo que los proxies
+
+La pantalla *Shared Flows* tiene ahora las tres operaciones de la de proxies:
+
+- **+ Nuevo Flow** abre el mismo asistente de 4 pasos, pidiendo un ZIP con la
+  carpeta `sharedflowbundle/` en la raíz.
+- **Save** en el editor guarda lo editado en
+  `src/main/apigee/sharedflows/<flow>/sharedflowbundle/` y despliega, con el mismo
+  chip `Deploying…` y el mismo banner de error del emulador.
+- La columna **Acción** incluye la papelera, y las casillas permiten borrar varios
+  shared flows con un único redespliegue.
+
+Proxies y shared flows solo se diferencian en nombres de carpeta y de etiquetas
+XML, así que el backend los trata con una misma implementación parametrizada por
+`bundles.ArtifactKind`, y la UI reutiliza el asistente y el diálogo de borrado
+pasándoles `ARTIFACT_KINDS.sharedflow`:
+
+| | Proxy | Shared flow |
+|---|---|---|
+| Carpeta | `apiproxies/` | `sharedflows/` |
+| Raíz del bundle | `apiproxy/` | `sharedflowbundle/` |
+| Descriptor | `<APIProxy>` | `<SharedFlowBundle>` |
+| Flujos | `proxies/` (`<ProxyEndpoint>`) | `sharedflows/` (`<SharedFlow>`) |
+| Clave en `deployments.json` | `proxies` | `sharedflows` |
+| Basepath | sí, y se valida que no choque | no aplica |
+
+| Método   | Ruta                                              | Uso                             |
+|----------|---------------------------------------------------|---------------------------------|
+| `POST`   | `/v1/organizations/{org}/sharedflows`             | Importa un bundle y despliega   |
+| `POST`   | `/v1/sharedflows/{flow}/update`                   | Guarda archivos y despliega     |
+| `DELETE` | `/v1/organizations/{org}/sharedflows/{flow}`      | Elimina un shared flow          |
+| `POST`   | `/v1/sharedflows/delete`                          | Elimina varios de una vez       |
+
+Un detalle a tener presente si se tocan estas rutas: el árbol de archivos de un
+shared flow se lee desde `<flow>/sharedflowbundle`, de modo que las rutas que
+devuelve son relativas a la raíz del bundle igual que en los proxies. Cuando no lo
+eran, el guardado interpretaba `sharedflowbundle/policies/X.xml` como una ruta
+dentro del bundle y creaba `sharedflowbundle/sharedflowbundle/policies/X.xml`, con
+lo que la edición nunca llegaba al archivo real. Además de unificar la raíz, el
+guardado descarta el prefijo si viene incluido.
+
+
 ### Eliminar proxies desde la tabla
 
 La columna **Acción** incluye un botón de papelera por fila, y cada fila tiene una

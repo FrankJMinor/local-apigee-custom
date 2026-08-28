@@ -24,6 +24,7 @@ from drf_spectacular.views import (
 
 from APIs.views import (
     ApigeeOrganizationApisView,
+    ApigeeOrganizationSharedFlowsImportView,
     ApigeePolicyMenuView,
     ApigeeProxyDetailView,
     EmulatorDeployView,
@@ -32,8 +33,11 @@ from APIs.views import (
     ProxyDeployedListView,
     ProxyFileListView,
     ProxyFileUpdateView,
+    SharedFlowBulkDeleteView,
     SharedFlowDeployedListView,
+    SharedFlowDetailView,
     SharedFlowFileListView,
+    SharedFlowFileUpdateView,
 )
 
 urlpatterns = [
@@ -54,10 +58,24 @@ urlpatterns = [
     path("v1/proxies/<str:proxy_name>/files", ProxyFileListView.as_view()),
     # Guarda los archivos editados en la UI y redespliega el proxy
     path("v1/proxies/<str:proxy_name>/update", ProxyFileUpdateView.as_view()),
+    # POST importa un bundle de shared flow y lo despliega
+    path(
+        "v1/organizations/<str:org>/sharedflows",
+        ApigeeOrganizationSharedFlowsImportView.as_view(),
+    ),
+    # DELETE elimina un shared flow del workspace y del runtime del emulador
+    path(
+        "v1/organizations/<str:org>/sharedflows/<str:shared_flow_name>",
+        SharedFlowDetailView.as_view(),
+    ),
+    # Borrado en bloque de shared flows con un único redespliegue
+    path("v1/sharedflows/delete", SharedFlowBulkDeleteView.as_view()),
     # Ruta para listar shared flows desplegados (sin detalles de archivos)
     path("v1/sharedflows/deployed", SharedFlowDeployedListView.as_view()),
     # Rutas para operaciones de archivos dentro de un shared flow específico
     path("v1/sharedflows/<str:shared_flow_name>/files", SharedFlowFileListView.as_view()),
+    # Guarda los archivos editados del shared flow y redespliega
+    path("v1/sharedflows/<str:shared_flow_name>/update", SharedFlowFileUpdateView.as_view()),
     # Ruta para obtener el menú de políticas
     path("v1/policies/menu", ApigeePolicyMenuView.as_view()),
     # 2. Las rutas de la documentación

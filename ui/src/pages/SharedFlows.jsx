@@ -1,20 +1,28 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { StatusBadge } from '../components/StatusBadge'
-import { IconRefresh, IconRocket } from '../components/Icons'
+import { IconRefresh, IconRocket, IconTrash } from '../components/Icons'
+import { NewProxyModal } from '../components/NewProxyModal'
+import { DeleteProxiesModal } from '../components/DeleteProxiesModal'
+import { ARTIFACT_KINDS } from '../utils/importProxyBundle'
 import { getDotColor, isErrorState } from '../utils/states'
 import s from './table.module.css'
 
+const KIND = ARTIFACT_KINDS.sharedflow
 
 function SharedFlows() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('')
   const [sharedFlows, setSharedFlows] = useState([])
   const [loading, setLoading] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
+  // Nombres marcados para borrar.
+  const [selected, setSelected] = useState(() => new Set())
+  const [pendingDelete, setPendingDelete] = useState([])
 
-  const loadSharedFlows = () => {
+  const loadSharedFlows = useCallback(() => {
     setLoading(true)
-    fetch('http://localhost:8446/v1/sharedflows/deployed')
+    fetch('/v1/sharedflows/deployed')
       .then(res => res.json())
       .then(data => {
         const list = data.shared_flows || []
@@ -29,16 +37,39 @@ function SharedFlows() {
       })
       .catch(() => setSharedFlows([]))
       .finally(() => setLoading(false))
-  }
+  }, [])
 
   useEffect(() => {
     loadSharedFlows()
-  }, [])
+  }, [loadSharedFlows])
 
   const searchLower = search.toLowerCase()
   const filtered = sharedFlows.filter(r =>
     [r.name, r.revision, r.state].join(' ').toLowerCase().includes(searchLower)
   )
+
+  const visibleNames = [...new Set(filtered.map(r => r.name))]
+  const allVisibleSelected = visibleNames.length > 0 && visibleNames.every(n => selected.has(n))
+
+  const toggleOne = name => setSelected(prev => {
+    const next = new Set(prev)
+    if (next.has(name)) next.delete(name); else next.add(name)
+    return next
+  })
+
+  // La cabecera solo alterna lo que el filtro tiene a la vista.
+  const toggleAllVisible = () => setSelected(prev => {
+    const next = new Set(prev)
+    if (allVisibleSelected) visibleNames.forEach(n => next.delete(n))
+    else visibleNames.forEach(n => next.add(n))
+    return next
+  })
+
+  const handleDeleted = () => {
+    setSelected(new Set())
+    setPendingDelete([])
+    loadSharedFlows()
+  }
 
   return (
     <div>
@@ -51,7 +82,7 @@ function SharedFlows() {
           <button className={s.btnSecondary} onClick={loadSharedFlows} disabled={loading}>
             <IconRefresh size={14} /> {loading ? 'Actualizando...' : 'Actualizar'}
           </button>
-          <button className={s.btnPrimary}>+ Nuevo Flow</button>
+          <button className={s.btnPrimary} onClick={() => setModalOpen(true)}>+ Nuevo Flow</button>
         </div>
       </div>
 
@@ -66,13 +97,30 @@ function SharedFlows() {
               onChange={e => setSearch(e.target.value)}
             />
           </div>
-          <span className={s.countLabel}>{filtered.length} de {sharedFlows.length} shared flows</span>
+          <div className={s.tableBarRight}>
+            {selected.size > 0 && (
+              <button className={s.btnDanger} onClick={() => setPendingDelete([...selected])}>
+                <IconTrash size={13} /> Eliminar ({selected.size})
+              </button>
+            )}
+            <span className={s.countLabel}>{filtered.length} de {sharedFlows.length} shared flows</span>
+          </div>
         </div>
 
         <div className={s.tableWrapper}>
           <table className={s.table}>
             <thead>
               <tr>
+                <th className={s.checkCell}>
+                  <input
+                    type="checkbox"
+                    className={s.checkbox}
+                    checked={allVisibleSelected}
+                    onChange={toggleAllVisible}
+                    disabled={visibleNames.length === 0}
+                    aria-label="Seleccionar todos los shared flows visibles"
+                  />
+                </th>
                 <th>Nombre del Flow</th>
                 <th>Revisión</th>
                 <th>Estado</th>
@@ -83,9 +131,18 @@ function SharedFlows() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={6} className={s.empty}>Sin resultados</td></tr>
+                <tr><td colSpan={7} className={s.empty}>Sin resultados</td></tr>
               ) : filtered.map(row => (
-                <tr key={row.name}>
+                <tr key={row.name} className={selected.has(row.name) ? s.rowSelected : ''}>
+                  <td className={s.checkCell}>
+                    <input
+                      type="checkbox"
+                      className={s.checkbox}
+                      checked={selected.has(row.name)}
+                      onChange={() => toggleOne(row.name)}
+                      aria-label={`Seleccionar ${row.name}`}
+                    />
+                  </td>
                   <td>
                     <span className={s.nameCell}>
                       <span className={s.dot} style={{ background: getDotColor(row.state) }} />
@@ -105,13 +162,23 @@ function SharedFlows() {
                   </td>
                   <td className={s.dateCell}>{row.lastModified}</td>
                   <td>
-                    <button
-                      className={`${s.deployBtn} ${isErrorState(row.state) ? s.deployBtnDisabled : ''}`}
-                      disabled={isErrorState(row.state)}
-                      onClick={() => alert(`Desplegando ${row.name}…`)}
-                    >
-                      <IconRocket size={13} /> Desplegar
-                    </button>
+                    <div className={s.actionCell}>
+                      <button
+                        className={`${s.deployBtn} ${isErrorState(row.state) ? s.deployBtnDisabled : ''}`}
+                        disabled={isErrorState(row.state)}
+                        onClick={() => alert(`Desplegando ${row.name}…`)}
+                      >
+                        <IconRocket size={13} /> Desplegar
+                      </button>
+                      <button
+                        className={`${s.iconAction} ${s.iconActionDanger}`}
+                        onClick={() => setPendingDelete([row.name])}
+                        title={`Eliminar ${row.name}`}
+                        aria-label={`Eliminar ${row.name}`}
+                      >
+                        <IconTrash size={15} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -119,6 +186,25 @@ function SharedFlows() {
           </table>
         </div>
       </div>
+
+      <DeleteProxiesModal
+        isOpen={pendingDelete.length > 0}
+        proxies={pendingDelete}
+        kind={KIND}
+        onClose={() => setPendingDelete([])}
+        onDeleted={handleDeleted}
+      />
+
+      <NewProxyModal
+        isOpen={modalOpen}
+        kind={KIND}
+        onClose={() => setModalOpen(false)}
+        onCreated={loadSharedFlows}
+        onOpenProxy={flowName => {
+          setModalOpen(false)
+          navigate(`/shared-flows/${encodeURIComponent(flowName)}`)
+        }}
+      />
     </div>
   )
 }

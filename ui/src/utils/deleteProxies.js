@@ -1,24 +1,26 @@
-// Utilidad para eliminar proxies del workspace y del runtime del emulador.
+// Utilidad para eliminar proxies o shared flows del workspace y del runtime del emulador.
 // El proxy de Vite reenvía /v1 al backend de Django, así que las rutas van relativas.
 
 import { formatEmulatorError } from './deployProxy'
+import { ARTIFACT_KINDS } from './importProxyBundle'
 
 /**
- * Elimina uno o varios proxies con un único redespliegue.
+ * Elimina uno o varios artefactos con un único redespliegue.
  *
- * El emulador no expone un borrado por proxy: su runtime se deriva del workspace,
- * así que el backend los saca de `src/main/apigee/apiproxies/` y redespliega. Si el
- * contrato resultante no compila, los proxies se restauran.
+ * El emulador no expone un borrado por artefacto: su runtime se deriva del
+ * workspace, así que el backend los saca de disco y redespliega. Si el contrato
+ * resultante no compila, se restauran todos.
  *
- * @param {string[]} proxies Nombres de los proxies a eliminar.
+ * @param {string[]} names Nombres a eliminar.
+ * @param {object} kind Tipo de artefacto (ver ARTIFACT_KINDS).
  * @returns {Promise<{deleted: string[], notFound: string[], revision: string}>}
  * @throws {Error} Con un mensaje legible; `reverted` indica si se restauraron.
  */
-export async function deleteProxies(proxies) {
-  const res = await fetch('/v1/proxies/delete', {
+export async function deleteProxies(names, kind = ARTIFACT_KINDS.proxy) {
+  const res = await fetch(kind.deletePath, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ proxies }),
+    body: JSON.stringify(kind.deleteBody(names)),
   })
 
   let payload = null

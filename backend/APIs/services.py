@@ -232,7 +232,10 @@ def get_sharedflow_file_tree(shared_flow_name: str) -> Optional[Dict[str, Any]]:
         logger.error("No se pudo localizar la ruta base para shared flows.")
         return None
 
-    sharedflow_root = os.path.join(base_path, shared_flow_name)
+    # Entramos a /sharedflowbundle para que las rutas queden relativas a la raiz
+    # del bundle, igual que hace get_proxy_file_tree con /apiproxy. Si no, la UI
+    # devolveria rutas con el prefijo y el guardado crearia carpetas anidadas.
+    sharedflow_root = os.path.join(base_path, shared_flow_name, "sharedflowbundle")
     logger.debug(f"Buscando shared flow '{shared_flow_name}' en la ruta: {sharedflow_root}")
 
     if not os.path.exists(sharedflow_root):

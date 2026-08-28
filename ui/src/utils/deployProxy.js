@@ -1,3 +1,5 @@
+import { ARTIFACT_KINDS } from './importProxyBundle'
+
 // Utilidades para persistir cambios del editor y desplegarlos en el emulador local.
 // El proxy de Vite reenvía /v1 al backend de Django, así que las rutas van relativas.
 
@@ -59,13 +61,13 @@ async function postJson(url, body) {
 }
 
 /**
- * Guarda archivos del proxy en el workspace y, por defecto, redespliega.
+ * Guarda archivos del artefacto en el workspace y, por defecto, redespliega.
  *
- * @param {{ proxyName: string, files: Array<{path: string, content: string}>, deploy?: boolean }} params
+ * @param {{ proxyName: string, files: Array<{path: string, content: string}>, deploy?: boolean, kind?: object }} params
  * @returns {Promise<{proxy: string, saved: string[], deployed: boolean, revision: string}>}
  */
-export function saveProxyFiles({ proxyName, files, deploy = true }) {
-  return postJson(`/v1/proxies/${encodeURIComponent(proxyName)}/update`, { files, deploy })
+export function saveProxyFiles({ proxyName, files, deploy = true, kind = ARTIFACT_KINDS.proxy }) {
+  return postJson(kind.updatePath(proxyName), { files, deploy })
 }
 
 /**

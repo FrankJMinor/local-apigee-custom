@@ -129,8 +129,8 @@ class ApigeeOrganizationApisView(APIView):
                 "environment": environment,
                 "revision": revision,
                 "basepaths": metadata["basepaths"],
-                "proxies": metadata["proxy_endpoints"],
-                "targets": metadata["target_endpoints"],
+                "proxies": metadata["flows"],
+                "targets": metadata["targets"],
                 "policies": metadata["policies"],
                 "replaced": metadata["replaced"],
                 "declaredName": metadata["declared_name"],
@@ -358,7 +358,12 @@ class SharedFlowFileListView(APIView):
             )
 
         return Response(
-            {"shared_flow": shared_flow_name, "total_files": len(files), "files": files}
+            {
+                "shared_flow": shared_flow_name,
+                "revision": get_current_revision(),
+                "total_files": len(files),
+                "files": files,
+            }
         )
 
 
@@ -519,32 +524,32 @@ class ProxyFileUpdateView(APIView):
         )
 
 
-def _delete_and_deploy(proxy_names, environment):
-    """Saca los proxies del workspace y redespliega; revierte si el emulador falla.
+def _delete_and_deploy(names, environment, kind=bundles.PROXY):
+    """Saca los artefactos del workspace y redespliega; revierte si el emulador falla.
 
     Devuelve la tupla (payload, http_status) lista para responder.
     """
     try:
-        deleted, missing, backups = bundles.delete_proxy_bundles(proxy_names, environment)
+        deleted, missing, backups = bundles.delete_bundles(names, environment, kind)
     except bundles.BundleError as exc:
         return {"error": str(exc)}, status.HTTP_400_BAD_REQUEST
 
     if not deleted:
         return (
             {
-                "error": "Ninguno de los proxies indicados existe en el workspace.",
+                "error": f"Ninguno de los {kind.label}s indicados existe en el workspace.",
                 "notFound": missing,
             },
             status.HTTP_404_NOT_FOUND,
         )
 
     try:
-        # El emulador no expone un borrado por proxy: su runtime se deriva del
+        # El emulador no expone un borrado por artefacto: su runtime se deriva del
         # workspace, así que redesplegar sin ellos es lo que los saca del contenedor.
         deployment = emulator.deploy_workspace(environment)
     except emulator.EmulatorError as exc:
         logger.error(f"Despliegue fallido tras borrar {deleted}, revirtiendo: {exc}")
-        bundles.restore_deleted_bundles(backups, environment)
+        bundles.restore_deleted_bundles(backups, environment, kind)
 
         return (
             {
@@ -632,4 +637,278 @@ class ProxyBulkDeleteView(APIView):
 
         environment = payload.get("environment") or settings.APIGEE_ENVIRONMENT
         body, code = _delete_and_deploy(proxies, environment)
+        return Response(body, status=code)
+
+
+# ── Shared flows ────────────────────────────────────────────────────────────
+# Mismo ciclo que los proxies (alta por bundle, guardado + despliegue y borrado),
+# apoyado en bundles.SHAREDFLOW para las diferencias de carpetas y etiquetas XML.
+
+
+class ApigeeOrganizationSharedFlowsImportView(APIView):
+    """Importa un bundle de shared flow y lo despliega en el emulador."""
+
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(
+        summary="Importa un bundle de shared flow y lo despliega",
+        description=(
+            "Réplica local de "
+            "`POST /v1/organizations/{org}/sharedflows?action=import&name={name}`.\n\n"
+            "Recibe el ZIP (con la carpeta `sharedflowbundle/` en la raíz), lo valida, lo "
+            "escribe en `src/main/apigee/sharedflows/<name>`, lo registra en "
+            "`deployments.json` y despliega. Si el emulador rechaza el contrato, el "
+            "workspace se deja como estaba."
+        ),
+        parameters=[
+            OpenApiParameter("action", str, description="Compatibilidad con Apigee: `import`."),
+            OpenApiParameter("name", str, description="Nombre del shared flow a crear."),
+            OpenApiParameter("overwrite", bool, description="Reemplaza uno existente."),
+        ],
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string", "format": "binary"},
+                    "name": {"type": "string"},
+                    "environment": {"type": "string"},
+                    "overwrite": {"type": "boolean"},
+                },
+                "required": ["file"],
+            }
+        },
+        responses={201: dict, 400: dict, 502: dict},
+    )
+    def post(self, request, org):
+        upload = request.FILES.get("file") or request.FILES.get("bundle")
+
+        if upload is None:
+            return Response(
+                {
+                    "error": "Falta el archivo del bundle.",
+                    "detail": "Envía el ZIP en el campo 'file' de un formulario multipart.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        raw_name = request.query_params.get("name") or request.data.get("name") or ""
+        if not raw_name:
+            raw_name = os.path.splitext(os.path.basename(upload.name or ""))[0]
+
+        environment = request.data.get("environment") or settings.APIGEE_ENVIRONMENT
+        overwrite = _as_bool(
+            request.query_params.get("overwrite") or request.data.get("overwrite") or False
+        )
+
+        try:
+            metadata, backup = bundles.import_bundle(
+                upload.read(),
+                raw_name,
+                environment=environment,
+                overwrite=overwrite,
+                kind=bundles.SHAREDFLOW,
+            )
+        except bundles.BundleError as exc:
+            logger.warning(f"Bundle de shared flow rechazado para '{raw_name}': {exc}")
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        flow_name = metadata["name"]
+
+        try:
+            deployment = emulator.deploy_workspace(environment)
+        except emulator.EmulatorError as exc:
+            logger.error(f"Despliegue fallido del shared flow '{flow_name}', revirtiendo: {exc}")
+            bundles.remove_bundle(flow_name, bundles.SHAREDFLOW)
+            bundles.unregister_deployment(flow_name, environment, bundles.SHAREDFLOW)
+
+            if backup:
+                previous = metadata.get("replacedName") or flow_name
+                bundles.restore_bundle(backup, previous, bundles.SHAREDFLOW)
+                bundles.register_deployment(previous, environment, bundles.SHAREDFLOW)
+
+            return Response(
+                {"error": exc.message, "detail": exc.detail, "sharedFlow": flow_name},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        bundles.discard_backup(backup)
+        revision = str(deployment.get("revision", "1"))
+        logger.info(f"Shared flow '{flow_name}' desplegado en la revisión {revision} de {org}")
+
+        return Response(
+            {
+                "name": flow_name,
+                "organization": org,
+                "environment": environment,
+                "revision": revision,
+                "flows": metadata["flows"],
+                "policies": metadata["policies"],
+                "replaced": metadata["replaced"],
+                "declaredName": metadata["declared_name"],
+                "files": metadata["files"],
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class SharedFlowFileUpdateView(APIView):
+    """Guarda archivos editados de un shared flow y despliega la revisión resultante."""
+
+    @extend_schema(
+        summary="Guarda archivos de un shared flow y lo despliega",
+        description=(
+            "Escribe el contenido editado en "
+            "`src/main/apigee/sharedflows/<flow>/sharedflowbundle/` y, si `deploy` es "
+            "true, despliega devolviendo la revisión. Si el emulador rechaza el "
+            "contrato, los archivos vuelven a su estado anterior.\n\n"
+            "Acepta un único archivo (`path` + `content`) o varios en `files`."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "content": {"type": "string"},
+                    "files": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "path": {"type": "string"},
+                                "content": {"type": "string"},
+                            },
+                        },
+                    },
+                    "deploy": {"type": "boolean", "default": True},
+                    "environment": {"type": "string"},
+                },
+            }
+        },
+        responses={200: dict, 400: dict, 502: dict},
+    )
+    def post(self, request, shared_flow_name):
+        payload = request.data if isinstance(request.data, dict) else {}
+        files = payload.get("files")
+
+        # Compatibilidad con el guardado de un solo archivo desde el editor.
+        if not files and payload.get("path") is not None:
+            files = [{"path": payload.get("path"), "content": payload.get("content")}]
+
+        if not isinstance(files, list) or not files:
+            return Response(
+                {
+                    "error": "No se recibió ningún archivo que guardar.",
+                    "detail": "Envía 'files' con objetos 'path' y 'content'.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        environment = payload.get("environment") or settings.APIGEE_ENVIRONMENT
+        should_deploy = _as_bool(payload.get("deploy", True))
+
+        try:
+            written, backup = bundles.save_artifact_files(
+                shared_flow_name, files, bundles.SHAREDFLOW
+            )
+        except bundles.BundleError as exc:
+            logger.warning(f"Guardado rechazado para el shared flow '{shared_flow_name}': {exc}")
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not should_deploy:
+            bundles.discard_backup(backup)
+            return Response(
+                {
+                    "sharedFlow": shared_flow_name,
+                    "saved": written,
+                    "deployed": False,
+                    "revision": get_current_revision(),
+                }
+            )
+
+        try:
+            deployment = emulator.deploy_workspace(environment)
+        except emulator.EmulatorError as exc:
+            logger.error(f"Despliegue fallido tras editar '{shared_flow_name}': {exc}")
+            bundles.restore_bundle(backup, shared_flow_name, bundles.SHAREDFLOW)
+
+            return Response(
+                {
+                    "error": exc.message,
+                    "detail": exc.detail,
+                    "sharedFlow": shared_flow_name,
+                    "reverted": True,
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        bundles.discard_backup(backup)
+        revision = str(deployment.get("revision") or get_current_revision() or "1")
+        logger.info(f"Shared flow '{shared_flow_name}' actualizado en la revisión {revision}")
+
+        return Response(
+            {
+                "sharedFlow": shared_flow_name,
+                "saved": written,
+                "deployed": True,
+                "environment": environment,
+                "revision": revision,
+            }
+        )
+
+
+class SharedFlowDetailView(APIView):
+    """Elimina un shared flow del workspace y del runtime del emulador."""
+
+    @extend_schema(
+        summary="Elimina un shared flow",
+        description=(
+            "Réplica local de `DELETE /v1/organizations/{org}/sharedflows/{name}`. Lo saca "
+            "de `src/main/apigee/sharedflows/`, lo desregistra del `deployments.json` y "
+            "redespliega para que desaparezca del contenedor. Si el despliegue falla, "
+            "el shared flow vuelve a su sitio."
+        ),
+        responses={200: dict, 400: dict, 404: dict, 502: dict},
+    )
+    def delete(self, request, org, shared_flow_name):
+        environment = request.query_params.get("environment") or settings.APIGEE_ENVIRONMENT
+        payload, code = _delete_and_deploy([shared_flow_name], environment, bundles.SHAREDFLOW)
+        return Response(payload, status=code)
+
+
+class SharedFlowBulkDeleteView(APIView):
+    """Elimina varios shared flows a la vez con un único redespliegue."""
+
+    @extend_schema(
+        summary="Elimina varios shared flows",
+        description=(
+            "Borra en bloque y redespliega una sola vez. Si el emulador rechaza el "
+            "contrato resultante, todos los shared flows se restauran."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "sharedflows": {"type": "array", "items": {"type": "string"}},
+                    "environment": {"type": "string"},
+                },
+                "required": ["sharedflows"],
+            }
+        },
+        responses={200: dict, 400: dict, 404: dict, 502: dict},
+    )
+    def post(self, request):
+        payload = request.data if isinstance(request.data, dict) else {}
+        flows = payload.get("sharedflows")
+
+        if not isinstance(flows, list) or not flows:
+            return Response(
+                {
+                    "error": "No se recibió ningún shared flow que eliminar.",
+                    "detail": "Envía 'sharedflows' con la lista de nombres.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        environment = payload.get("environment") or settings.APIGEE_ENVIRONMENT
+        body, code = _delete_and_deploy(flows, environment, bundles.SHAREDFLOW)
         return Response(body, status=code)
