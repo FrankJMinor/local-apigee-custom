@@ -324,3 +324,16 @@ def policy_types_for(file_tree: Optional[Dict[str, Any]]) -> Dict[str, str]:
         for policy in file_tree.get("policies") or []
         if policy.get("name")
     }
+
+
+def fingerprint(raw: Dict[str, Any]) -> str:
+    """Huella barata del contenido de una traza, para detectar cambios.
+
+    El emulador devuelve siempre todas las transacciones capturadas, así que hay
+    que distinguir "lo mismo de antes" de "llegó algo nuevo". Cuenta mensajes y
+    puntos: crece tanto al llegar una petición nueva como al avanzar una que
+    todavía está en curso.
+    """
+    messages = raw.get("Messages") or []
+    points = sum(len(m.get("point") or []) for m in messages if isinstance(m, dict))
+    return f"{len(messages)}:{points}"

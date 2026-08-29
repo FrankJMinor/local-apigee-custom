@@ -56,3 +56,62 @@ export const STEP_STYLES = {
   engine:    { label: 'Motor',     color: '#94a3b8' },
   transport: { label: 'Transporte', color: '#64748b' },
 }
+
+/**
+ * Se suscribe por SSE a las transacciones de una sesión de trace.
+ *
+ * El emulador no notifica nada por su cuenta —no expone webhook ni socket—, así
+ * que quien sondea es el backend y solo empuja cuando el contenido cambia. Aquí
+ * el navegador ya no sondea: se entera en cuanto llega la petición.
+ *
+ * Se usa EventSource y no WebSocket porque el flujo es de una sola dirección y
+ * así el backend sigue sobre el WSGI que ya corre el proyecto.
+ *
+ * @param {string} proxyName
+ * @param {string} sessionId
+ * @param {{onData: Function, onError?: Function, onEnd?: Function}} handlers
+ * @returns {() => void} Función para cerrar la suscripción.
+ */
+export function subscribeTransactions(proxyName, sessionId, { onData, onError, onEnd }) {
+  const url = `/v1/proxies/${encodeURIComponent(proxyName)}/trace/${encodeURIComponent(sessionId)}/stream`
+  const source = new EventSource(url)
+
+  source.addEventListener('transactions', e => {
+    try {
+      onData(JSON.parse(e.data))
+    } catch {
+      onError?.('No se pudo leer el evento del stream')
+    }
+  })
+
+  source.addEventListener('error', e => {
+    // El backend manda un evento 'error' con detalle; el navegador usa el mismo
+    // nombre para fallos de conexión, que llegan sin data.
+    if (e.data) {
+      try {
+        onError?.(JSON.parse(e.data).error)
+        return
+      } catch { /* cae al manejo genérico */ }
+    }
+    if (source.readyState === EventSource.CLOSED) onError?.('Se perdió la conexión con el stream')
+  })
+
+  source.addEventListener('end', () => {
+    source.close()
+    onEnd?.()
+  })
+
+  return () => source.close()
+}
+
+/**
+ * Formatea los segundos restantes de la sesión como m:ss.
+ *
+ * El emulador da 600 s por defecto: "9:47" se lee mucho mejor que "587s".
+ */
+export function formatCountdown(totalSeconds) {
+  const safe = Math.max(0, Math.floor(totalSeconds))
+  const minutes = Math.floor(safe / 60)
+  const seconds = safe % 60
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
+}

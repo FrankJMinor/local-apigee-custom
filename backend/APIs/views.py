@@ -1,15 +1,19 @@
 # local imports
+import json
 import logging
 
 # global libraries
 import os
 import socket
+import time
 from datetime import datetime
 
 from django.conf import settings
+from django.http import StreamingHttpResponse
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -29,6 +33,29 @@ logger = logging.getLogger(__name__)
 def _as_bool(value) -> bool:
     """Interpreta los valores que envían los formularios HTML como booleanos."""
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+class SSERenderer(BaseRenderer):
+    """Renderer que permite a DRF negociar `text/event-stream`.
+
+    Sin él, la negociación de contenido responde 406 a `EventSource`, que envía
+    `Accept: text/event-stream`. El cuerpo lo emite un StreamingHttpResponse, así
+    que este render() nunca llega a usarse.
+    """
+
+    media_type = "text/event-stream"
+    format = "sse"
+    charset = "utf-8"
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        return data
+
+
+def _sse(event: str, payload: dict) -> str:
+    """Serializa un evento en el formato de Server-Sent Events."""
+    data = json.dumps(payload, ensure_ascii=False)
+    return f"event: {event}\ndata: {data}\n\n"
+
 
 
 class ApigeeOrganizationApisView(APIView):
@@ -1011,3 +1038,79 @@ class ProxyTraceTransactionsView(APIView):
         )
 
         return Response({"proxy": proxy_name, **normalized})
+
+
+class ProxyTraceStreamView(APIView):
+    """Empuja las transacciones nuevas de una sesion de trace por SSE.
+
+    El emulador no notifica nada por su cuenta: no expone webhook ni socket, solo
+    el GET de transacciones. Asi que quien sondea es el backend, cada
+    APIGEE_TRACE_POLL_SECONDS, y solo empuja al navegador cuando el contenido
+    cambia de verdad. La UI deja de sondear y se entera en cuanto llega la
+    peticion.
+
+    Se usa Server-Sent Events y no WebSocket a proposito: el flujo es de una sola
+    direccion (servidor -> navegador), funciona sobre el WSGI que ya corre el
+    proyecto y no obliga a migrar a ASGI ni a anadir Channels/Daphne.
+    """
+
+    renderer_classes = [SSERenderer]
+
+    @extend_schema(
+        summary="Stream SSE de las transacciones de una sesion de trace",
+        description=(
+            "Mantiene abierta una conexion `text/event-stream`. Emite un evento "
+            "`transactions` con la traza normalizada cada vez que el emulador registra "
+            "algo nuevo, y comentarios de keep-alive mientras no hay cambios. Termina "
+            "cuando caduca la sesion o el cliente cierra la conexion."
+        ),
+        responses={(200, "text/event-stream"): str},
+    )
+    def get(self, request, proxy_name, session_id):
+        poll_seconds = settings.APIGEE_TRACE_POLL_SECONDS
+        max_seconds = settings.APIGEE_TRACE_STREAM_MAX_SECONDS
+        verbose = _as_bool(request.query_params.get("verbose"))
+
+        # El tipo de cada politica sale del bundle, no del trace. Se resuelve una
+        # vez al abrir el stream para no releer el arbol en cada sondeo.
+        policy_types = trace.policy_types_for(get_proxy_file_tree(proxy_name))
+
+        def event_stream():
+            started = time.monotonic()
+            last_fingerprint = None
+            last_heartbeat = started
+
+            while time.monotonic() - started < max_seconds:
+                try:
+                    raw = emulator.get_trace_transactions(session_id)
+                except emulator.EmulatorError as exc:
+                    logger.warning(f"Stream de trace '{session_id}' interrumpido: {exc}")
+                    yield _sse("error", {"error": exc.message, "detail": exc.detail})
+                    return
+
+                fingerprint = trace.fingerprint(raw)
+
+                if fingerprint != last_fingerprint:
+                    last_fingerprint = fingerprint
+                    payload = trace.normalize_transactions(
+                        raw, policy_types=policy_types, include_noisy=verbose
+                    )
+                    yield _sse("transactions", {"proxy": proxy_name, **payload})
+                    last_heartbeat = time.monotonic()
+
+                elif time.monotonic() - last_heartbeat >= 15:
+                    # Comentario SSE: mantiene viva la conexion sin ensuciar los datos.
+                    yield ": keep-alive\n\n"
+                    last_heartbeat = time.monotonic()
+
+                time.sleep(poll_seconds)
+
+            yield _sse("end", {"reason": "timeout"})
+
+        response = StreamingHttpResponse(
+            event_stream(), content_type="text/event-stream; charset=utf-8"
+        )
+        response["Cache-Control"] = "no-cache"
+        # Evita que un proxy intermedio acumule el stream en un buffer.
+        response["X-Accel-Buffering"] = "no"
+        return response

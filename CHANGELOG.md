@@ -36,6 +36,11 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
 - `APIs/trace.py`: aplana el formato de debug session de Apigee (unos 40 puntos por
   petición) en pasos legibles, descartando las ejecuciones internas del motor y las
   variables de infraestructura. `?raw=true` y `?verbose=true` los recuperan.
+- La viñeta Trace se actualiza sola cuando llega una petición, vía Server-Sent Events
+  (`GET /v1/proxies/{proxy}/trace/{sessionId}/stream`). El emulador no notifica nada por su
+  cuenta, así que sondea el backend y solo empuja al navegador cuando hay cambios; si el
+  stream no se establece, la UI cae a sondeo cada 2,5 s y lo indica con una insignia.
+- El cronómetro de la sesión de trace se muestra en `m:ss` en lugar de solo segundos.
 - Shared flows con el mismo ciclo que los proxies: alta por bundle desde **+ Nuevo Flow**,
   guardado + despliegue desde el editor con chip de estado, y borrado individual o múltiple
   desde la tabla.

@@ -54,6 +54,17 @@
   border-radius: 5px;
   padding: 2px 7px;
 }
+.feedBadge {
+  font-size: 0.7em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 5px;
+  padding: 2px 7px;
+  background: rgba(16, 185, 129, 0.14);
+  color: #10b981;
+}
+
 .sessionId {
   font-family: 'Fira Code', monospace;
   font-size: 0.78em;

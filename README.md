@@ -150,6 +150,50 @@ Antes, las tres viñetas del editor (*Develop*, *Trace*, *Performance*) solo
 cambiaban el estilo del botón: `activeTab` no condicionaba el cuerpo, así que
 pulsarlas no hacía nada. Ahora *Develop* y *Trace* renderizan contenido propio.
 
+#### Actualización automática: por qué SSE y no WebSocket
+
+Cuando llega una petición al proxy, la página se actualiza sola: no hay que pulsar
+*Actualizar*. El cronómetro de la sesión se muestra en `m:ss` (`9:47`), y una
+insignia indica si los datos llegan **en vivo** o por **sondeo** de respaldo.
+
+Conviene ser preciso sobre qué se puede empujar y qué no: **el emulador no
+notifica nada por su cuenta**. No expone webhook ni socket, solo el GET de
+transacciones. Así que alguien tiene que sondearlo; lo que cambia es quién.
+Ahora lo hace el backend (cada `APIGEE_TRACE_POLL_SECONDS`, 1 s por defecto) y
+solo empuja al navegador cuando el contenido cambia de verdad.
+
+Para ese empuje se eligió **Server-Sent Events** en lugar de WebSocket:
+
+- El flujo es de una sola dirección (servidor → navegador). Un WebSocket
+  bidireccional no aporta nada aquí.
+- SSE funciona sobre el WSGI que ya corre el proyecto. Un WebSocket obligaría a
+  migrar a ASGI y añadir `channels` + `daphne`: nuevas dependencias, cambio del
+  `CMD` del Dockerfile y reconstrucción de la imagen.
+- `EventSource` es nativo del navegador y reconecta solo.
+
+| Método | Ruta                                             | Uso                        |
+|--------|--------------------------------------------------|----------------------------|
+| `GET`  | `/v1/proxies/{proxy}/trace/{sessionId}/stream`   | Stream `text/event-stream` |
+
+El stream emite un evento `transactions` con la traza normalizada en cada cambio,
+comentarios de keep-alive cada 15 s mientras no pasa nada, y un evento `end` al
+caducar. Si por lo que sea no se establece, la UI cae automáticamente a sondear
+cada 2,5 s y lo indica en la insignia.
+
+Dos detalles de implementación que costaron encontrar:
+
+- DRF respondía **406** a `EventSource`, porque su negociación de contenido solo
+  anunciaba JSON y el navegador envía `Accept: text/event-stream`. Se resuelve con
+  un `SSERenderer` que declara ese media type.
+- El stream lleva `X-Accel-Buffering: no` y `Cache-Control: no-cache` para que
+  ningún proxy intermedio lo acumule en un buffer. Verificado a través del proxy
+  de Vite: los eventos llegan en menos de un segundo.
+
+Como el servidor de desarrollo dedica un hilo a cada conexión abierta,
+`APIGEE_TRACE_STREAM_MAX_SECONDS` (660 s) corta el stream aunque el cliente se
+haya ido sin cerrarlo.
+
+
 **La API de trace del emulador**
 
 | Método | Ruta                                             | Uso                                  |

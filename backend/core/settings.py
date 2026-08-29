@@ -150,6 +150,16 @@ APIGEE_SOURCE_ARCHIVE_PREFIX = "src"
 # Compilar y activar un contrato puede tardar varios segundos.
 APIGEE_EMULATOR_TIMEOUT = int(os.environ.get("APIGEE_EMULATOR_TIMEOUT", "120"))
 
+# Cada cuánto sondea el backend al emulador mientras hay un stream de trace
+# abierto. El emulador no notifica nada por su cuenta: solo expone el GET.
+APIGEE_TRACE_POLL_SECONDS = float(os.environ.get("APIGEE_TRACE_POLL_SECONDS", "1.0"))
+
+# Tope de vida de un stream SSE, para que un cliente que se va no deje el hilo
+# del servidor de desarrollo ocupado indefinidamente.
+APIGEE_TRACE_STREAM_MAX_SECONDS = int(
+    os.environ.get("APIGEE_TRACE_STREAM_MAX_SECONDS", "660")
+)
+
 # Los bundles de proxy se suben completos en memoria (por defecto DRF corta en 2.5 MB).
 DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024

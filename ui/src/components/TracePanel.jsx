@@ -1,11 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import PropTypes from 'prop-types'
 import { IconTrace, IconRefresh, IconX } from './Icons'
-import { startTrace, fetchTransactions, STEP_STYLES } from '../utils/traceSession'
+import {
+  startTrace,
+  fetchTransactions,
+  subscribeTransactions,
+  formatCountdown,
+  STEP_STYLES,
+} from '../utils/traceSession'
 import s from './TracePanel.module.css'
 
-/** Cada cuánto se consultan transacciones nuevas mientras la sesión está viva. */
-const POLL_MS = 2500
+/** Respaldo por sondeo si el navegador o el proxy no dejan pasar el SSE. */
+const FALLBACK_POLL_MS = 2500
 
 function StatusPill({ code }) {
   if (code === undefined || code === null) return <span className={s.pillMuted}>—</span>
@@ -94,6 +100,9 @@ export function TracePanel({ proxyName, basePath }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [secondsLeft, setSecondsLeft] = useState(0)
+  // 'live' mientras el stream empuja; 'polling' si hubo que caer al respaldo.
+  const [feed, setFeed] = useState('idle')
+  const closeStreamRef = useRef(null)
   const pollRef = useRef(null)
 
   const refresh = useCallback(async (sessionId) => {
@@ -106,13 +115,39 @@ export function TracePanel({ proxyName, basePath }) {
     }
   }, [proxyName])
 
-  // Mientras la sesión esté viva consultamos transacciones nuevas.
+  // El backend empuja por SSE en cuanto el emulador registra algo, así que la
+  // página se actualiza sola sin que el navegador sondee.
   useEffect(() => {
-    if (!session?.sessionId || secondsLeft <= 0) return undefined
+    if (!session?.sessionId) return undefined
 
-    pollRef.current = setInterval(() => refresh(session.sessionId), POLL_MS)
-    return () => clearInterval(pollRef.current)
-  }, [session, secondsLeft, refresh])
+    let fellBack = false
+
+    const startPolling = () => {
+      if (fellBack) return
+      fellBack = true
+      setFeed('polling')
+      pollRef.current = setInterval(() => refresh(session.sessionId), FALLBACK_POLL_MS)
+    }
+
+    setFeed('live')
+    closeStreamRef.current = subscribeTransactions(proxyName, session.sessionId, {
+      onData: data => {
+        setTransactions(data.transactions || [])
+        setError(null)
+      },
+      onError: message => {
+        // Si el stream no llega a establecerse seguimos sirviendo datos por sondeo.
+        setError(message || null)
+        startPolling()
+      },
+      onEnd: () => setFeed('idle'),
+    })
+
+    return () => {
+      closeStreamRef.current?.()
+      clearInterval(pollRef.current)
+    }
+  }, [session, proxyName, refresh])
 
   // Cuenta atrás hasta que el emulador cierra la sesión por timeout.
   useEffect(() => {
@@ -141,7 +176,9 @@ export function TracePanel({ proxyName, basePath }) {
   }
 
   const stop = () => {
+    closeStreamRef.current?.()
     clearInterval(pollRef.current)
+    setFeed('idle')
     setSecondsLeft(0)
   }
 
@@ -165,7 +202,20 @@ export function TracePanel({ proxyName, basePath }) {
               <span className={s.sessionLabel}>
                 {live ? 'Capturando' : 'Sesión finalizada'}
               </span>
-              {live && <span className={s.countdown}>{secondsLeft}s</span>}
+              {live && (
+                <span className={s.countdown} title="Tiempo restante de la sesión">
+                  {formatCountdown(secondsLeft)}
+                </span>
+              )}
+              {live && (
+                <span className={s.feedBadge} title={
+                  feed === 'live'
+                    ? 'El servidor empuja los cambios en cuanto llegan'
+                    : 'El stream no está disponible: consultando cada 2,5 s'
+                }>
+                  {feed === 'live' ? 'en vivo' : 'sondeo'}
+                </span>
+              )}
               <span className={s.sessionId}>{session.sessionId?.slice(0, 8)}…</span>
             </>
           )}
@@ -221,7 +271,7 @@ export function TracePanel({ proxyName, basePath }) {
           </p>
           <p className={s.emptyText}>
             {live
-              ? 'Lanza una petición al proxy y aparecerá aquí en unos segundos.'
+              ? 'Lanza una petición al proxy y aparecerá aquí sola, sin recargar.'
               : 'Inicia una sesión nueva y vuelve a intentarlo.'}
           </p>
           <code className={s.emptyCode}>curl {sampleUrl}</code>

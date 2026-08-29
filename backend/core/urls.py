@@ -34,6 +34,7 @@ from APIs.views import (
     ProxyFileListView,
     ProxyFileUpdateView,
     ProxyTraceStartView,
+    ProxyTraceStreamView,
     ProxyTraceTransactionsView,
     SharedFlowBulkDeleteView,
     SharedFlowDeployedListView,
@@ -65,6 +66,11 @@ urlpatterns = [
     path(
         "v1/proxies/<str:proxy_name>/trace/<str:session_id>",
         ProxyTraceTransactionsView.as_view(),
+    ),
+    # Stream SSE: empuja las transacciones nuevas sin que la UI tenga que sondear
+    path(
+        "v1/proxies/<str:proxy_name>/trace/<str:session_id>/stream",
+        ProxyTraceStreamView.as_view(),
     ),
     # POST importa un bundle de shared flow y lo despliega
     path(
