@@ -115,3 +115,37 @@ export function formatCountdown(totalSeconds) {
   const seconds = safe % 60
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
+
+/**
+ * Lanza una petición contra el proxy desde la UI, como el "Send Requests" de Edge.
+ *
+ * Va por el backend y no por el navegador porque el runtime del emulador
+ * (puerto 8445) no manda cabeceras CORS: un fetch directo fallaría antes de
+ * llegar al proxy, y la traza no registraría nada.
+ *
+ * @param {string} proxyName
+ * @param {{method: string, path: string, headers?: object, body?: string}} params
+ * @returns {Promise<{statusCode: number, elapsedMs: number, headers: object, body: string}>}
+ */
+export async function invokeProxy(proxyName, params) {
+  const res = await fetch(`/v1/proxies/${encodeURIComponent(proxyName)}/invoke`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  })
+
+  let payload = null
+  try {
+    payload = await res.json()
+  } catch {
+    // El backend siempre responde JSON; si no, nos quedamos con el status.
+  }
+
+  if (!res.ok) {
+    const error = new Error(payload?.error || `Error HTTP ${res.status} al enviar la petición`)
+    error.detail = payload?.detail || ''
+    throw error
+  }
+
+  return payload
+}

@@ -158,28 +158,30 @@
   font-size: 0.84em;
   color: var(--text-secondary);
 }
-.waitPulse {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 3px solid var(--border);
-  border-top-color: var(--accent);
-  animation: spin 1s linear infinite;
-}
 
 /* ── Cuerpo de tres columnas ── */
 .body {
   display: grid;
-  grid-template-columns: minmax(190px, 240px) 1fr;
+  grid-template-columns: minmax(260px, 320px) 1fr;
   flex: 1;
   min-height: 0;
   overflow: hidden;
 }
 
-/* Mapa arriba a todo lo ancho, detalle debajo: el reparto de Apigee Edge */
+/* Izquierda: transacciones arriba y opciones de vista abajo, como en Edge */
+.leftPane {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  border-right: 1px solid var(--border);
+  background: var(--bg-card);
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Derecha: barra de envio, Transaction Map y detalle de la fase */
 .rightPane {
   display: grid;
-  grid-template-rows: minmax(150px, auto) 1fr;
+  grid-template-rows: auto minmax(130px, auto) 1fr;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -202,163 +204,6 @@
   top: 0;
   z-index: 1;
 }
-
-/* ── Lista de transacciones ── */
-.txList {
-  border-right: 1px solid var(--border);
-  overflow-y: auto;
-  background: var(--bg-card);
-}
-.txItem {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 0.7em 1em;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  border-left: 3px solid transparent;
-  background: none;
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.txItem:hover { background: var(--bg-row-hover); }
-.txItemActive {
-  background: var(--bg-row-hover);
-  border-left-color: var(--accent);
-}
-.txTop {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5em;
-  margin-bottom: 0.25em;
-}
-.txVerb {
-  font-family: 'Fira Code', monospace;
-  font-size: 0.78em;
-  font-weight: 700;
-  color: var(--accent);
-}
-.txUri {
-  font-size: 0.82em;
-  color: var(--text-secondary);
-  word-break: break-all;
-  line-height: 1.4;
-}
-.txMeta {
-  font-size: 0.75em;
-  color: var(--text-muted);
-  margin-top: 0.3em;
-}
-
-/* ── Detalle ── */
-.detail {
-  overflow-y: auto;
-  background: var(--bg-card);
-  min-height: 0;
-}
-
-/* Con el mapa a todo lo ancho, el detalle cabe en dos columnas */
-.detailBody {
-  padding: 1em;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 0 1.6em;
-  align-items: start;
-}
-.detailHead { grid-column: 1 / -1; }
-.detailHead {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15em;
-  margin-bottom: 1em;
-  padding-bottom: 0.7em;
-  border-bottom: 1px solid var(--border);
-}
-.detailTitle {
-  font-size: 0.98em;
-  font-weight: 700;
-  color: var(--text-title);
-  word-break: break-word;
-}
-.detailKind { font-size: 0.78em; color: var(--text-muted); }
-.detailEmpty {
-  padding: 1.5em 1em;
-  font-size: 0.85em;
-  color: var(--text-muted);
-  text-align: center;
-}
-
-.varBlock, .msgBlock { margin-bottom: 1.1em; }
-.varTitle {
-  font-size: 0.72em;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  margin-bottom: 0.45em;
-}
-.varRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-  gap: 0.7em;
-  padding: 0.35em 0.55em;
-  border-radius: 5px;
-  font-size: 0.79em;
-  align-items: baseline;
-}
-.varRow:nth-child(odd) { background: var(--bg-th); }
-.varName {
-  font-family: 'Fira Code', monospace;
-  word-break: break-all;
-  color: var(--text-secondary);
-}
-.varRead  { color: #60a5fa; }
-.varWrite { color: #34d399; }
-.varValue {
-  font-family: 'Fira Code', monospace;
-  color: var(--text-primary);
-  word-break: break-all;
-}
-.varEmpty { color: var(--text-muted); }
-
-.msgLine {
-  font-size: 0.83em;
-  margin-bottom: 0.45em;
-  display: flex;
-  align-items: center;
-  gap: 0.5em;
-  word-break: break-all;
-}
-.msgHeaders { margin-top: 0.3em; }
-.msgBody {
-  margin-top: 0.5em;
-  padding: 0.6em 0.75em;
-  border-radius: 6px;
-  background: var(--bg-th);
-  border: 1px solid var(--border);
-  font-family: 'Fira Code', monospace;
-  font-size: 0.78em;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 14em;
-  overflow: auto;
-}
-
-/* ── Píldora de estado HTTP ── */
-.pill {
-  font-family: 'Fira Code', monospace;
-  font-size: 0.74em;
-  font-weight: 700;
-  border-radius: 5px;
-  padding: 1px 7px;
-}
-.pillOk    { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-.pillWarn  { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
-.pillError { background: rgba(239, 68, 68, 0.15);  color: #ef4444; }
-.pillMuted { font-size: 0.74em; color: var(--text-muted); }
 
 /* ── Transaction Map (estilo traza de Apigee Edge) ── */
 .mapColumn {
@@ -494,22 +339,304 @@
   pointer-events: none;
 }
 
-/* ── Paso seleccionado bajo el mapa ── */
-.mapSelected {
+/* ── Tabla de transacciones ── */
+.txScroll { overflow: auto; min-height: 0; }
+
+.txTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78em;
+}
+.txTable th {
+  position: sticky;
+  top: 0;
+  text-align: left;
+  padding: 0.45em 0.6em;
+  font-size: 0.92em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: var(--bg-th);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.txTable td {
+  padding: 0.45em 0.6em;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.txTable tbody tr { cursor: pointer; transition: background 0.15s; }
+.txTable tbody tr:hover { background: var(--bg-row-hover); }
+.txRowActive { background: var(--bg-row-hover); box-shadow: inset 3px 0 0 var(--accent); }
+
+.txNum { color: var(--text-muted); font-family: 'Fira Code', monospace; }
+.txUriCell {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+.txElapsed {
+  font-family: 'Fira Code', monospace;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.txEmpty {
+  padding: 1.6em 1em;
+  text-align: center;
+  font-size: 0.83em;
+  color: var(--text-muted);
+}
+
+/* ── View Options ── */
+.viewOptions {
+  border-top: 1px solid var(--border);
+  padding: 0.75em 0.9em;
+  background: var(--bg-th);
+}
+.viewOptionsTitle {
+  font-size: 0.7em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 0.5em;
+}
+.optionRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-size: 0.79em;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.16em 0;
+}
+.optionRow input { accent-color: var(--accent); cursor: pointer; }
+
+/* ── Barra "Send Requests" ── */
+.sendBar {
+  display: flex;
+  align-items: center;
+  gap: 0.55em;
+  padding: 0.6em 1em;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+  flex-wrap: wrap;
+}
+.sendLabel {
+  font-size: 0.7em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.sendMethod {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--input-border);
+  background: var(--bg-th);
+  color: var(--text-primary);
+  font-family: 'Fira Code', monospace;
+  font-size: 0.8em;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sendHost {
+  font-family: 'Fira Code', monospace;
+  font-size: 0.78em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.sendInput {
+  flex: 1;
+  min-width: 160px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--input-border);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-family: 'Fira Code', monospace;
+  font-size: 0.8em;
+  outline: none;
+}
+.sendInput:focus { border-color: var(--accent); }
+.sendResult {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: 0.78em;
+  color: var(--text-muted);
+  font-family: 'Fira Code', monospace;
+}
+
+.btnStop {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 0.85em;
+  font-weight: 600;
+  cursor: pointer;
+  background: #dc2626;
+  border: 1px solid #dc2626;
+  color: #fff;
+}
+.btnStop:hover { background: #b91c1c; }
+
+/* ── Phase Details ── */
+.phaseHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  padding: 0.6em 1em;
+  font-size: 0.72em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  background: var(--bg-th);
+  border-bottom: 1px solid var(--border);
+}
+.phaseNav { display: flex; gap: 0.4em; }
+.navBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 0.95em;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+.navBtn:hover { background: var(--bg-row-hover); color: var(--text-primary); }
+.navBack svg { transform: rotate(180deg); }
+
+.phaseBody { padding: 0.9em 1em 1.4em; }
+.phaseTitleRow {
   display: flex;
   flex-direction: column;
   gap: 0.15em;
-  padding: 0.7em 1em;
-  border-top: 1px solid var(--border);
-  background: var(--bg-th);
+  margin-bottom: 0.9em;
 }
-.mapSelectedTitle {
-  font-size: 0.88em;
+.phaseTitle {
+  font-size: 0.95em;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--text-title);
   word-break: break-word;
 }
-.mapSelectedMeta {
-  font-size: 0.76em;
-  color: var(--text-muted);
+.phaseMeta { font-size: 0.77em; color: var(--text-muted); }
+
+/* Dos columnas: petición a la izquierda, respuesta a la derecha */
+.phaseColumns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 0 1.8em;
+  align-items: start;
 }
+.phaseCol { min-width: 0; }
+
+.phaseColTitle {
+  font-size: 0.86em;
+  font-weight: 700;
+  color: var(--text-primary);
+  padding-bottom: 0.45em;
+  margin-bottom: 0.7em;
+  border-bottom: 2px solid var(--border);
+}
+/* La regla de color separa petición de respuesta, como en Edge */
+.phaseReq  { border-bottom-color: #ec4899; }
+.phaseResp { border-bottom-color: #10b981; }
+
+.phaseSub {
+  font-size: 0.71em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 0.9em 0 0.4em;
+}
+.phaseLine {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  font-size: 0.82em;
+  font-family: 'Fira Code', monospace;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+.phaseNone { font-size: 0.79em; color: var(--text-muted); }
+.phaseBodyPre {
+  padding: 0.6em 0.75em;
+  border-radius: 6px;
+  background: var(--bg-th);
+  border: 1px solid var(--border);
+  font-family: 'Fira Code', monospace;
+  font-size: 0.77em;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 13em;
+  overflow: auto;
+}
+.phaseProps { margin-top: 1.2em; }
+
+/* ── Tabla clave/valor ── */
+.kvTable { display: flex; flex-direction: column; }
+.kvRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: 0.7em;
+  padding: 0.3em 0.5em;
+  border-radius: 4px;
+  font-size: 0.77em;
+  align-items: baseline;
+}
+.kvRow:nth-child(odd) { background: var(--bg-th); }
+.kvKey {
+  font-family: 'Fira Code', monospace;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+.kvRead  { color: #60a5fa; }
+.kvWrite { color: #34d399; }
+.kvValue {
+  font-family: 'Fira Code', monospace;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+.kvEmpty { color: var(--text-muted); }
+
+/* ── Contenedor del detalle de fase ── */
+.detail {
+  overflow-y: auto;
+  background: var(--bg-card);
+  min-height: 0;
+}
+
+.txVerb {
+  font-family: 'Fira Code', monospace;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* ── Píldora de estado HTTP ── */
+.pill {
+  font-family: 'Fira Code', monospace;
+  font-size: 0.74em;
+  font-weight: 700;
+  border-radius: 5px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+.pillOk    { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+.pillWarn  { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.pillError { background: rgba(239, 68, 68, 0.15);  color: #ef4444; }
+.pillMuted { font-size: 0.74em; color: var(--text-muted); }

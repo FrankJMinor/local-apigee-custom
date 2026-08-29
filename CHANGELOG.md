@@ -47,6 +47,12 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
   SVG de `ui/icons`, con color de categoría y siglas del tipo para los que no tienen icono.
 - Los flow hooks se reconocen en la traza (`FlowCallout` / `FlowReturn`) y se agrupan sobre
   una banda verde con el nombre del shared flow, junto con todo lo que se ejecuta dentro.
+- La viñeta Trace adopta el acomodo de la traza de Apigee Edge: tabla de transacciones
+  (#, Estado, Método, URI, Tiempo) y opciones de vista a la izquierda; barra *Enviar
+  petición*, Transaction Map y detalle de fase en dos columnas a la derecha, con navegación
+  *Anterior* / *Siguiente* y descarga de la traza en JSON.
+- `POST /v1/proxies/{proxy}/invoke`: lanza tráfico contra el proxy desde la propia UI. Va
+  por el backend porque el runtime del emulador no manda cabeceras CORS.
 - Shared flows con el mismo ciclo que los proxies: alta por bundle desde **+ Nuevo Flow**,
   guardado + despliegue desde el editor con chip de estado, y borrado individual o múltiple
   desde la tabla.

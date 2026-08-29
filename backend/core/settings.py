@@ -150,6 +150,11 @@ APIGEE_SOURCE_ARCHIVE_PREFIX = "src"
 # Compilar y activar un contrato puede tardar varios segundos.
 APIGEE_EMULATOR_TIMEOUT = int(os.environ.get("APIGEE_EMULATOR_TIMEOUT", "120"))
 
+# Runtime del emulador: el puerto por el que entra el tráfico de los proxies.
+# La barra "Send Requests" de la traza lo usa para lanzar peticiones desde la UI.
+APIGEE_RUNTIME_URL = os.environ.get("APIGEE_RUNTIME_URL", "http://apigee-dev:8998")
+APIGEE_RUNTIME_TIMEOUT = int(os.environ.get("APIGEE_RUNTIME_TIMEOUT", "30"))
+
 # Cada cuánto sondea el backend al emulador mientras hay un stream de trace
 # abierto. El emulador no notifica nada por su cuenta: solo expone el GET.
 APIGEE_TRACE_POLL_SECONDS = float(os.environ.get("APIGEE_TRACE_POLL_SECONDS", "1.0"))

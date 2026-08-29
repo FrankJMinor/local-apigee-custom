@@ -150,6 +150,39 @@ Antes, las tres viñetas del editor (*Develop*, *Trace*, *Performance*) solo
 cambiaban el estilo del botón: `activeTab` no condicionaba el cuerpo, así que
 pulsarlas no hacía nada. Ahora *Develop* y *Trace* renderizan contenido propio.
 
+#### El acomodo, calcado de la traza de Edge
+
+La pantalla reparte lo mismo que la traza de Apigee Edge, con los colores del
+tema actual:
+
+- **Izquierda**: tabla de transacciones con las columnas *#*, *Estado*, *Método*,
+  *URI* y *Tiempo*, y debajo el panel de **opciones de vista**.
+- **Arriba a la derecha**: barra **Enviar petición** (método, host, ruta y *Send*),
+  que lanza tráfico contra el proxy sin salir de la pantalla y muestra el código y
+  el tiempo de respuesta.
+- **Centro**: el Transaction Map.
+- **Abajo**: **Detalle de la fase**, en dos columnas —petición a la izquierda con
+  una regla rosa, respuesta a la derecha con una regla verde— y los botones
+  *Anterior* / *Siguiente* para recorrer las fases.
+
+Las opciones de vista filtran el mapa sin recargar: *Mostrar cambios de estado* y
+*Mostrar condiciones* quitan esas baldosas, y *Mostrar variables* y *Mostrar
+propiedades* controlan qué secciones aparecen en el detalle.
+
+El botón **Descargar** guarda la traza normalizada en JSON.
+
+**La barra "Send Requests" pasa por el backend.** El runtime del emulador
+(puerto 8445) no manda cabeceras CORS, así que un `fetch` directo desde la página
+fallaría antes de llegar al proxy y la traza no registraría nada.
+`POST /v1/proxies/{proxy}/invoke` reenvía la petición desde el contenedor del
+backend, donde el runtime es accesible en `http://apigee-dev:8998`, y devuelve
+estado, cabeceras, cuerpo y tiempo.
+
+| Método | Ruta                            | Uso                                    |
+|--------|----------------------------------|----------------------------------------|
+| `POST` | `/v1/proxies/{proxy}/invoke`     | Lanza tráfico contra el proxy desde la UI |
+
+
 #### El Transaction Map
 
 La traza se pinta como el *Transaction Map* de Apigee Edge: dos carriles

@@ -6,6 +6,8 @@ import logging
 import os
 import socket
 import time
+import urllib.error
+import urllib.request
 from datetime import datetime
 
 from django.conf import settings
@@ -1114,3 +1116,99 @@ class ProxyTraceStreamView(APIView):
         # Evita que un proxy intermedio acumule el stream en un buffer.
         response["X-Accel-Buffering"] = "no"
         return response
+
+
+class ProxyInvokeView(APIView):
+    """Reenvia una peticion al runtime del emulador desde la UI.
+
+    Replica el "Send Requests" de la traza de Apigee Edge. Va por el backend y no
+    por el navegador porque el runtime (puerto 8445) no manda cabeceras CORS: un
+    fetch directo desde la pagina fallaria antes de llegar al proxy.
+    """
+
+    @extend_schema(
+        summary="Lanza una peticion contra el proxy en el emulador",
+        description=(
+            "Reenvia el metodo, la ruta y el cuerpo indicados al runtime del emulador y "
+            "devuelve el resultado. Sirve para disparar traficotrazado desde la propia UI."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "method": {"type": "string", "default": "GET"},
+                    "path": {"type": "string"},
+                    "headers": {"type": "object"},
+                    "body": {"type": "string"},
+                },
+                "required": ["path"],
+            }
+        },
+        responses={200: dict, 400: dict, 502: dict},
+    )
+    def post(self, request, proxy_name):
+        payload = request.data if isinstance(request.data, dict) else {}
+        method = str(payload.get("method") or "GET").upper()
+        path = str(payload.get("path") or "").strip()
+
+        if not path.startswith("/"):
+            return Response(
+                {
+                    "error": "La ruta debe empezar por '/'.",
+                    "detail": "Ejemplo: /hello?cliente=demo",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if method not in {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}:
+            return Response(
+                {"error": f"Método HTTP no soportado: {method}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        url = f"{settings.APIGEE_RUNTIME_URL.rstrip('/')}{path}"
+        body = payload.get("body")
+        data = body.encode("utf-8") if body else None
+
+        headers = {
+            str(k): str(v)
+            for k, v in (payload.get("headers") or {}).items()
+            if k and v is not None
+        }
+
+        started = time.monotonic()
+
+        try:
+            req = urllib.request.Request(url, data=data, headers=headers, method=method)
+            with urllib.request.urlopen(req, timeout=settings.APIGEE_RUNTIME_TIMEOUT) as resp:
+                raw = resp.read()
+                result = {
+                    "statusCode": resp.status,
+                    "reasonPhrase": resp.reason,
+                    "headers": dict(resp.headers.items()),
+                    "body": raw.decode("utf-8", errors="replace"),
+                }
+        except urllib.error.HTTPError as exc:
+            # Un 4xx/5xx del proxy es un resultado válido, no un fallo de la llamada.
+            raw = exc.read()
+            result = {
+                "statusCode": exc.code,
+                "reasonPhrase": exc.reason,
+                "headers": dict(exc.headers.items()) if exc.headers else {},
+                "body": raw.decode("utf-8", errors="replace"),
+            }
+        except urllib.error.URLError as exc:
+            logger.warning(f"No se pudo invocar '{url}': {exc.reason}")
+            return Response(
+                {
+                    "error": f"No se pudo contactar al runtime en {settings.APIGEE_RUNTIME_URL}.",
+                    "detail": str(exc.reason),
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        result["elapsedMs"] = round((time.monotonic() - started) * 1000)
+        result["url"] = url
+        result["method"] = method
+        logger.info(f"Invocado {method} {path} -> {result['statusCode']} ({result['elapsedMs']} ms)")
+        return Response(result)

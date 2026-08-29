@@ -33,6 +33,7 @@ from APIs.views import (
     ProxyDeployedListView,
     ProxyFileListView,
     ProxyFileUpdateView,
+    ProxyInvokeView,
     ProxyTraceStartView,
     ProxyTraceStreamView,
     ProxyTraceTransactionsView,
@@ -61,6 +62,8 @@ urlpatterns = [
     path("v1/proxies/<str:proxy_name>/files", ProxyFileListView.as_view()),
     # Guarda los archivos editados en la UI y redespliega el proxy
     path("v1/proxies/<str:proxy_name>/update", ProxyFileUpdateView.as_view()),
+    # Lanza tráfico contra el proxy desde la UI (barra "Send Requests" de la traza)
+    path("v1/proxies/<str:proxy_name>/invoke", ProxyInvokeView.as_view()),
     # Abre una sesión de trace sobre el proxy y consulta lo capturado
     path("v1/proxies/<str:proxy_name>/trace", ProxyTraceStartView.as_view()),
     path(

@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import PropTypes from 'prop-types'
-import { IconTrace, IconRefresh, IconX } from './Icons'
+import { IconTrace, IconRefresh, IconX, IconDownload, IconChevronRight } from './Icons'
 import {
   startTrace,
   fetchTransactions,
   subscribeTransactions,
   formatCountdown,
+  invokeProxy,
   STEP_STYLES,
 } from '../utils/traceSession'
 import { visualFor, splitPhases } from '../utils/policyVisuals'
@@ -13,6 +14,8 @@ import s from './TracePanel.module.css'
 
 /** Respaldo por sondeo si el navegador o el proxy no dejan pasar el SSE. */
 const FALLBACK_POLL_MS = 2500
+
+const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD']
 
 function StatusPill({ code }) {
   if (code === undefined || code === null) return <span className={s.pillMuted}>—</span>
@@ -23,20 +26,18 @@ function StatusPill({ code }) {
 
 StatusPill.propTypes = { code: PropTypes.oneOfType([PropTypes.string, PropTypes.number]) }
 
-function VariableList({ title, items, tone }) {
-  if (!items?.length) return null
+/** Tabla clave/valor para cabeceras, variables y propiedades. */
+function KeyValueTable({ rows, tone }) {
+  if (!rows.length) return null
   return (
-    <div className={s.varBlock}>
-      <div className={s.varTitle}>{title}</div>
-      {items.map((v, i) => (
-        <div key={`${v.name}-${i}`} className={s.varRow}>
-          <span className={`${s.varName} ${tone === 'write' ? s.varWrite : s.varRead}`}>
-            {v.name}
-          </span>
-          <span className={s.varValue}>
-            {v.value === undefined || v.value === null || v.value === ''
-              ? <em className={s.varEmpty}>sin valor</em>
-              : String(v.value)}
+    <div className={s.kvTable}>
+      {rows.map(([key, value], i) => (
+        <div key={`${key}-${i}`} className={s.kvRow}>
+          <span className={`${s.kvKey} ${tone ? s[tone] : ''}`}>{key}</span>
+          <span className={s.kvValue}>
+            {value === undefined || value === null || value === ''
+              ? <em className={s.kvEmpty}>sin valor</em>
+              : String(value)}
           </span>
         </div>
       ))}
@@ -44,51 +45,13 @@ function VariableList({ title, items, tone }) {
   )
 }
 
-VariableList.propTypes = {
-  title: PropTypes.string.isRequired,
-  items: PropTypes.array,
-  tone: PropTypes.string,
-}
-
-function MessageBlock({ title, message }) {
-  if (!message) return null
-  const headers = Object.entries(message.headers || {})
-
-  return (
-    <div className={s.msgBlock}>
-      <div className={s.varTitle}>{title}</div>
-      {message.verb && (
-        <div className={s.msgLine}>
-          <strong>{message.verb}</strong> {message.uri}
-        </div>
-      )}
-      {message.statusCode !== undefined && message.statusCode !== null && (
-        <div className={s.msgLine}>
-          <StatusPill code={message.statusCode} /> {message.reasonPhrase}
-        </div>
-      )}
-      {headers.length > 0 && (
-        <div className={s.msgHeaders}>
-          {headers.map(([k, v]) => (
-            <div key={k} className={s.varRow}>
-              <span className={s.varName}>{k}</span>
-              <span className={s.varValue}>{v}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {message.body ? <pre className={s.msgBody}>{message.body}</pre> : null}
-    </div>
-  )
-}
-
-MessageBlock.propTypes = { title: PropTypes.string.isRequired, message: PropTypes.object }
+KeyValueTable.propTypes = { rows: PropTypes.array.isRequired, tone: PropTypes.string }
 
 /**
  * Una casilla del Transaction Map.
  *
- * Reproduce la baldosa de la traza de Apigee Edge: color por categoria de
- * politica, con el SVG cuando existe y las siglas cuando no.
+ * Reproduce la baldosa de la traza de Apigee Edge: color por categoría de
+ * política, con el SVG cuando existe y las siglas cuando no.
  */
 function MapTile({ step, active, onSelect }) {
   const visual = visualFor(step)
@@ -101,11 +64,9 @@ function MapTile({ step, active, onSelect }) {
       onClick={onSelect}
       title={`${step.title}${step.policyType ? ` (${step.policyType})` : ''}`}
     >
-      {visual.icon ? (
-        <img src={visual.icon} alt="" className={s.tileIcon} />
-      ) : (
-        <span className={s.tileLabel}>{visual.label}</span>
-      )}
+      {visual.icon
+        ? <img src={visual.icon} alt="" className={s.tileIcon} />
+        : <span className={s.tileLabel}>{visual.label}</span>}
     </button>
   )
 }
@@ -119,7 +80,7 @@ MapTile.propTypes = {
 /**
  * Un carril del mapa: los pasos de una fase, unidos por el riel.
  *
- * Los pasos que ocurren dentro de un flow hook se agrupan sobre una banda mas
+ * Los pasos que ocurren dentro de un flow hook se agrupan sobre una banda más
  * clara, para distinguir de un vistazo lo que viene del shared flow.
  */
 function MapRail({ label, steps, selectedIndex, onSelect }) {
@@ -170,13 +131,11 @@ MapRail.propTypes = {
 }
 
 /**
- * Panel de Trace del editor de proxies.
+ * Panel de Trace del editor de proxies, con el acomodo de la traza de Apigee Edge.
  *
- * Abre una sesión de depuración en el emulador y, mientras esté viva, consulta
- * periódicamente lo capturado. Por cada petición muestra la línea de tiempo del
- * flujo —políticas ejecutadas, condiciones evaluadas, cambios de estado— y, al
- * seleccionar un paso, las variables que leyó y escribió junto al mensaje tal
- * como estaba en ese instante.
+ * A la izquierda las transacciones capturadas y las opciones de vista; a la
+ * derecha la barra para lanzar peticiones, el Transaction Map y, debajo, el
+ * detalle de la fase seleccionada en dos columnas: petición y respuesta.
  */
 export function TracePanel({ proxyName, basePath }) {
   const [session, setSession] = useState(null)
@@ -188,6 +147,21 @@ export function TracePanel({ proxyName, basePath }) {
   const [secondsLeft, setSecondsLeft] = useState(0)
   // 'live' mientras el stream empuja; 'polling' si hubo que caer al respaldo.
   const [feed, setFeed] = useState('idle')
+
+  // Barra "Send Requests"
+  const [method, setMethod] = useState('GET')
+  const [path, setPath] = useState(basePath || '/')
+  const [sending, setSending] = useState(false)
+  const [lastResult, setLastResult] = useState(null)
+
+  // Panel "View Options"
+  const [options, setOptions] = useState({
+    states: true,
+    conditions: true,
+    variables: true,
+    properties: true,
+  })
+
   const closeStreamRef = useRef(null)
   const pollRef = useRef(null)
 
@@ -222,7 +196,6 @@ export function TracePanel({ proxyName, basePath }) {
         setError(null)
       },
       onError: message => {
-        // Si el stream no llega a establecerse seguimos sirviendo datos por sondeo.
         setError(message || null)
         startPolling()
       },
@@ -241,6 +214,9 @@ export function TracePanel({ proxyName, basePath }) {
     const timer = setInterval(() => setSecondsLeft(v => Math.max(0, v - 1)), 1000)
     return () => clearInterval(timer)
   }, [session, secondsLeft])
+
+  // La ruta sugerida sale del basepath real del ProxyEndpoint.
+  useEffect(() => { if (basePath) setPath(basePath) }, [basePath])
 
   const begin = async () => {
     setBusy(true)
@@ -268,14 +244,58 @@ export function TracePanel({ proxyName, basePath }) {
     setSecondsLeft(0)
   }
 
+  const send = async () => {
+    setSending(true)
+    setLastResult(null)
+    try {
+      setLastResult(await invokeProxy(proxyName, { method, path }))
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  // Descarga la traza tal cual, para revisarla o compartirla fuera de la UI.
+  const download = () => {
+    const blob = new Blob(
+      [JSON.stringify({ session, transactions }, null, 2)],
+      { type: 'application/json' }
+    )
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `trace-${proxyName}-${session?.sessionId?.slice(0, 8) || 'sesion'}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const toggle = key => setOptions(prev => ({ ...prev, [key]: !prev[key] }))
+
   const tx = transactions[selectedTx]
+
+  // Las opciones de vista filtran el mapa sin alterar los índices originales.
+  const visibleSteps = (tx?.steps || []).filter(st => {
+    if (!options.states && st.kind === 'state') return false
+    if (!options.conditions && st.kind === 'condition') return false
+    return true
+  })
+
   const step = tx?.steps?.[selectedStep]
-  const phases = splitPhases(tx?.steps || [])
+  const phases = splitPhases(visibleSteps)
   const live = Boolean(session) && secondsLeft > 0
   const sampleUrl = `http://localhost:8445${basePath && basePath !== '-' ? basePath : ''}`
 
+  // Navegación entre fases, como los botones Back/Next de Edge.
+  const goRelative = delta => {
+    const pos = visibleSteps.findIndex(v => v.index === selectedStep)
+    const next = visibleSteps[Math.min(visibleSteps.length - 1, Math.max(0, pos + delta))]
+    if (next) setSelectedStep(next.index)
+  }
+
   return (
     <div className={s.panel}>
+      {/* Barra de sesión */}
       <div className={s.toolbar}>
         <div className={s.toolbarLeft}>
           {!session ? (
@@ -311,19 +331,16 @@ export function TracePanel({ proxyName, basePath }) {
         <div className={s.toolbarRight}>
           {session && (
             <>
-              <button
-                className={s.btnGhost}
-                onClick={() => refresh(session.sessionId)}
-                title="Consultar ahora"
-              >
+              <button className={s.btnGhost} onClick={() => refresh(session.sessionId)}>
                 <IconRefresh size={13} /> Actualizar
               </button>
-              {live && (
-                <button className={s.btnGhost} onClick={stop}>Detener</button>
+              {live && <button className={s.btnStop} onClick={stop}>Detener sesión</button>}
+              <button className={s.btnGhost} onClick={begin} disabled={busy}>Nueva sesión</button>
+              {transactions.length > 0 && (
+                <button className={s.btnGhost} onClick={download} title="Descargar la traza en JSON">
+                  <IconDownload size={13} /> Descargar
+                </button>
               )}
-              <button className={s.btnGhost} onClick={begin} disabled={busy}>
-                Nueva sesión
-              </button>
             </>
           )}
         </div>
@@ -350,123 +367,236 @@ export function TracePanel({ proxyName, basePath }) {
         </div>
       )}
 
-      {session && transactions.length === 0 && (
-        <div className={s.empty}>
-          <span className={s.waitPulse} />
-          <p className={s.emptyTitle}>
-            {live ? 'Esperando peticiones…' : 'La sesión terminó sin capturar tráfico'}
-          </p>
-          <p className={s.emptyText}>
-            {live
-              ? 'Lanza una petición al proxy y aparecerá aquí sola, sin recargar.'
-              : 'Inicia una sesión nueva y vuelve a intentarlo.'}
-          </p>
-          <code className={s.emptyCode}>curl {sampleUrl}</code>
-        </div>
-      )}
-
-      {transactions.length > 0 && (
+      {session && (
         <div className={s.body}>
-          {/* Transacciones capturadas */}
-          <div className={s.txList}>
-            <div className={s.colHeader}>Peticiones ({transactions.length})</div>
-            {transactions.map((t, i) => (
-              <button
-                key={t.index}
-                className={`${s.txItem} ${i === selectedTx ? s.txItemActive : ''}`}
-                onClick={() => { setSelectedTx(i); setSelectedStep(0) }}
-              >
-                <div className={s.txTop}>
-                  <span className={s.txVerb}>{t.request?.verb || '—'}</span>
-                  <StatusPill code={t.response?.statusCode} />
-                </div>
-                <div className={s.txUri}>{t.request?.uri || '—'}</div>
-                <div className={s.txMeta}>
-                  {t.durationMs !== null ? `${t.durationMs} ms` : '—'} · {t.policies.length} política{t.policies.length === 1 ? '' : 's'}
-                </div>
-              </button>
-            ))}
-          </div>
+          {/* ── Izquierda: transacciones y opciones de vista ── */}
+          <div className={s.leftPane}>
+            <div className={s.colHeader}>Transacciones ({transactions.length})</div>
 
-          {/* A la derecha: el mapa arriba a todo lo ancho y el detalle debajo,
-              como en la traza de Apigee Edge */}
-          <div className={s.rightPane}>
-          <div className={s.mapColumn}>
-            <div className={s.colHeader}>Transaction Map</div>
-            <div className={s.mapScroll}>
-              <MapRail
-                label="Solicitud"
-                steps={phases.request}
-                selectedIndex={selectedStep}
-                onSelect={setSelectedStep}
-              />
-              <MapRail
-                label="Respuesta"
-                steps={phases.response}
-                selectedIndex={selectedStep}
-                onSelect={setSelectedStep}
-              />
+            <div className={s.txScroll}>
+              {transactions.length === 0 ? (
+                <p className={s.txEmpty}>
+                  {live ? 'Esperando peticiones…' : 'Sin tráfico capturado.'}
+                </p>
+              ) : (
+                <table className={s.txTable}>
+                  <thead>
+                    <tr>
+                      <th>#</th><th>Estado</th><th>Método</th><th>URI</th><th>Tiempo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactions.map((t, i) => (
+                      <tr
+                        key={t.index}
+                        className={i === selectedTx ? s.txRowActive : ''}
+                        onClick={() => { setSelectedTx(i); setSelectedStep(0) }}
+                      >
+                        <td className={s.txNum}>{transactions.length - i}</td>
+                        <td><StatusPill code={t.response?.statusCode} /></td>
+                        <td className={s.txVerb}>{t.request?.verb || '—'}</td>
+                        <td className={s.txUriCell} title={t.request?.uri}>
+                          {t.request?.uri || '—'}
+                        </td>
+                        <td className={s.txElapsed}>
+                          {t.durationMs !== null ? `${t.durationMs} ms` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
 
-            {/* El paso elegido, con su nombre y tiempo, bajo el mapa */}
-            {step && (
-              <div className={s.mapSelected}>
-                <span className={s.mapSelectedTitle}>{step.title}</span>
-                <span className={s.mapSelectedMeta}>
-                  {(STEP_STYLES[step.kind] || {}).label}
-                  {step.policyType ? ` · ${step.policyType}` : ''}
-                  {step.flowHook ? ` · flow hook: ${step.flowHook}` : ''}
-                  {step.offsetMs !== null ? ` · +${step.offsetMs} ms` : ''}
-                  {step.kind === 'condition' && step.expressionResult
-                    ? ` · ${step.expressionResult}`
-                    : ''}
+            <div className={s.viewOptions}>
+              <div className={s.viewOptionsTitle}>Opciones de vista</div>
+              <label className={s.optionRow}>
+                <input type="checkbox" checked={options.states} onChange={() => toggle('states')} />
+                Mostrar cambios de estado
+              </label>
+              <label className={s.optionRow}>
+                <input type="checkbox" checked={options.conditions} onChange={() => toggle('conditions')} />
+                Mostrar condiciones
+              </label>
+              <label className={s.optionRow}>
+                <input type="checkbox" checked={options.variables} onChange={() => toggle('variables')} />
+                Mostrar variables
+              </label>
+              <label className={s.optionRow}>
+                <input type="checkbox" checked={options.properties} onChange={() => toggle('properties')} />
+                Mostrar propiedades
+              </label>
+            </div>
+          </div>
+
+          {/* ── Derecha: envío, mapa y detalle de fase ── */}
+          <div className={s.rightPane}>
+            <div className={s.sendBar}>
+              <span className={s.sendLabel}>Enviar petición</span>
+              <select
+                className={s.sendMethod}
+                value={method}
+                onChange={e => setMethod(e.target.value)}
+              >
+                {METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <span className={s.sendHost}>http://localhost:8445</span>
+              <input
+                className={s.sendInput}
+                value={path}
+                onChange={e => setPath(e.target.value)}
+                placeholder="/hello?cliente=demo"
+                onKeyDown={e => { if (e.key === 'Enter' && !sending) send() }}
+              />
+              <button className={s.btnPrimary} onClick={send} disabled={sending || !path}>
+                {sending ? <span className={s.spinner} /> : null}
+                {sending ? 'Enviando…' : 'Send'}
+              </button>
+              {lastResult && (
+                <span className={s.sendResult}>
+                  <StatusPill code={lastResult.statusCode} /> {lastResult.elapsedMs} ms
                 </span>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
 
-          {/* Detalle del paso seleccionado */}
-          <div className={s.detail}>
-            <div className={s.colHeader}>Detalle del paso</div>
-            {step ? (
-              <div className={s.detailBody}>
-                <div className={s.detailHead}>
-                  <span className={s.detailTitle}>{step.title}</span>
-                  <span className={s.detailKind}>
-                    {(STEP_STYLES[step.kind] || {}).label}
-                    {step.policyType ? ` · ${step.policyType}` : ''}
-                  </span>
-                </div>
-
-                <VariableList title="Variables leídas" items={step.variables.read} tone="read" />
-                <VariableList title="Variables escritas" items={step.variables.written} tone="write" />
-                <MessageBlock title="Petición en este punto" message={step.request} />
-                <MessageBlock title="Respuesta en este punto" message={step.response} />
-
-                {Object.keys(step.properties || {}).length > 0 && (
-                  <div className={s.varBlock}>
-                    <div className={s.varTitle}>Propiedades</div>
-                    {Object.entries(step.properties).map(([k, v]) => (
-                      <div key={k} className={s.varRow}>
-                        <span className={s.varName}>{k}</span>
-                        <span className={s.varValue}>{v}</span>
-                      </div>
-                    ))}
-                  </div>
+            <div className={s.mapColumn}>
+              <div className={s.colHeader}>Transaction Map</div>
+              <div className={s.mapScroll}>
+                {tx ? (
+                  <>
+                    <MapRail
+                      label="Solicitud"
+                      steps={phases.request}
+                      selectedIndex={selectedStep}
+                      onSelect={setSelectedStep}
+                    />
+                    <MapRail
+                      label="Respuesta"
+                      steps={phases.response}
+                      selectedIndex={selectedStep}
+                      onSelect={setSelectedStep}
+                    />
+                  </>
+                ) : (
+                  <p className={s.txEmpty}>
+                    Lanza una petición y el flujo aparecerá aquí solo, sin recargar.
+                  </p>
                 )}
-
-                {!step.variables.read.length &&
-                  !step.variables.written.length &&
-                  !step.request &&
-                  !step.response &&
-                  !Object.keys(step.properties || {}).length && (
-                    <p className={s.detailEmpty}>Este paso no registró datos adicionales.</p>
-                  )}
               </div>
-            ) : (
-              <p className={s.detailEmpty}>Selecciona un paso del Transaction Map.</p>
-            )}
-          </div>
+            </div>
+
+            {/* ── Phase Details ── */}
+            <div className={s.detail}>
+              <div className={s.phaseHeader}>
+                <span>Detalle de la fase</span>
+                {step && (
+                  <span className={s.phaseNav}>
+                    <button className={`${s.navBtn} ${s.navBack}`} onClick={() => goRelative(-1)}>
+                      <IconChevronRight size={12} /> Anterior
+                    </button>
+                    <button className={s.navBtn} onClick={() => goRelative(1)}>
+                      Siguiente <IconChevronRight size={12} />
+                    </button>
+                  </span>
+                )}
+              </div>
+
+              {step ? (
+                <div className={s.phaseBody}>
+                  <div className={s.phaseTitleRow}>
+                    <span className={s.phaseTitle}>{step.title}</span>
+                    <span className={s.phaseMeta}>
+                      {(STEP_STYLES[step.kind] || {}).label}
+                      {step.policyType ? ` · ${step.policyType}` : ''}
+                      {step.flowHook ? ` · flow hook: ${step.flowHook}` : ''}
+                      {step.offsetMs !== null ? ` · +${step.offsetMs} ms` : ''}
+                      {step.kind === 'condition' && step.expressionResult
+                        ? ` · ${step.expressionResult}` : ''}
+                    </span>
+                  </div>
+
+                  <div className={s.phaseColumns}>
+                    {/* Petición en este punto */}
+                    <section className={s.phaseCol}>
+                      <h4 className={`${s.phaseColTitle} ${s.phaseReq}`}>
+                        {step.index === 0
+                          ? 'Petición recibida del cliente'
+                          : 'Petición en este punto'}
+                      </h4>
+                      {step.request ? (
+                        <>
+                          <div className={s.phaseLine}>
+                            <strong>{step.request.verb}</strong> {step.request.uri}
+                          </div>
+                          <h5 className={s.phaseSub}>Cabeceras de petición</h5>
+                          <KeyValueTable rows={Object.entries(step.request.headers || {})} />
+                          <h5 className={s.phaseSub}>Cuerpo de la petición</h5>
+                          {step.request.body
+                            ? <pre className={s.phaseBodyPre}>{step.request.body}</pre>
+                            : <p className={s.phaseNone}>Sin cuerpo</p>}
+                        </>
+                      ) : <p className={s.phaseNone}>Sin datos de petición en esta fase.</p>}
+
+                      {options.variables && (
+                        <>
+                          <h5 className={s.phaseSub}>Variables leídas</h5>
+                          {step.variables.read.length
+                            ? <KeyValueTable
+                                rows={step.variables.read.map(v => [v.name, v.value])}
+                                tone="kvRead"
+                              />
+                            : <p className={s.phaseNone}>Ninguna</p>}
+                        </>
+                      )}
+                    </section>
+
+                    {/* Respuesta en este punto */}
+                    <section className={s.phaseCol}>
+                      <h4 className={`${s.phaseColTitle} ${s.phaseResp}`}>
+                        {step.kind === 'state' && /RESP_SENT|END/i.test(step.title || '')
+                          ? 'Respuesta enviada al cliente'
+                          : 'Respuesta en este punto'}
+                      </h4>
+                      {step.response ? (
+                        <>
+                          <div className={s.phaseLine}>
+                            <StatusPill code={step.response.statusCode} />
+                            {' '}{step.response.reasonPhrase}
+                          </div>
+                          <h5 className={s.phaseSub}>Cabeceras de respuesta</h5>
+                          <KeyValueTable rows={Object.entries(step.response.headers || {})} />
+                          <h5 className={s.phaseSub}>Cuerpo de la respuesta</h5>
+                          {step.response.body
+                            ? <pre className={s.phaseBodyPre}>{step.response.body}</pre>
+                            : <p className={s.phaseNone}>Sin cuerpo</p>}
+                        </>
+                      ) : <p className={s.phaseNone}>Sin datos de respuesta en esta fase.</p>}
+
+                      {options.variables && (
+                        <>
+                          <h5 className={s.phaseSub}>Variables escritas</h5>
+                          {step.variables.written.length
+                            ? <KeyValueTable
+                                rows={step.variables.written.map(v => [v.name, v.value])}
+                                tone="kvWrite"
+                              />
+                            : <p className={s.phaseNone}>Ninguna</p>}
+                        </>
+                      )}
+                    </section>
+                  </div>
+
+                  {options.properties && Object.keys(step.properties || {}).length > 0 && (
+                    <section className={s.phaseProps}>
+                      <h5 className={s.phaseSub}>Propiedades</h5>
+                      <KeyValueTable rows={Object.entries(step.properties)} />
+                    </section>
+                  )}
+                </div>
+              ) : (
+                <p className={s.phaseNone}>Selecciona un paso del Transaction Map.</p>
+              )}
+            </div>
           </div>
         </div>
       )}
