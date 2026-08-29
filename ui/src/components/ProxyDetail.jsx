@@ -13,6 +13,7 @@ import {
 } from './Icons';
 import { AddPolicyModal } from './AddPolicyModal';
 import { AddFlowModal } from './AddFlowModal';
+import { TracePanel } from './TracePanel';
 import { saveProxyFiles, deployWorkspace } from '../utils/deployProxy';
 import SpikeArrestSVG from '../../icons/SpikeArrest.svg';
 
@@ -668,6 +669,17 @@ function ProxyDetail({ proxy, fileTree, onClose, refreshFileTree }) {
   useEffect(() => {
     if (proxy?.revision) setRevision(String(proxy.revision));
   }, [proxy?.revision]);
+
+  // El basepath real vive en el ProxyEndpoint; el listado solo simula uno a
+  // partir del nombre. La pestana de Trace lo usa para sugerir la peticion.
+  const basePath = React.useMemo(() => {
+    const endpoints = fileTree?.proxy_endpoints || [];
+    for (const endpoint of endpoints) {
+      const match = /<BasePath>([^<]*)<\/BasePath>/i.exec(endpoint.content || '');
+      if (match) return match[1].trim();
+    }
+    return '';
+  }, [fileTree]);
 
   // Espejo de selectedFile para leerlo desde efectos sin volverlo dependencia.
   const selectedFileRef = useRef(null);
@@ -1512,6 +1524,17 @@ function ProxyDetail({ proxy, fileTree, onClose, refreshFileTree }) {
 
 
       {/* Main Workspace */}
+      {activeTab === 'Trace' && (
+        <TracePanel proxyName={proxy.name} basePath={basePath} />
+      )}
+
+      {activeTab === 'Performance' && (
+        <div className={styles.tabPlaceholder}>
+          Las metricas de rendimiento aun no estan disponibles en el emulador local.
+        </div>
+      )}
+
+      {activeTab === 'Develop' && (
       <div className={styles.workspace} ref={workspaceRef}>
 
         {/* Left Sidebar: Navigator */}
@@ -1772,6 +1795,7 @@ function ProxyDetail({ proxy, fileTree, onClose, refreshFileTree }) {
           </button>
         )}
       </div>
+      )}
 
       <AddResourceModal 
         open={isAddResourceModalOpen} 

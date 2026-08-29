@@ -13,7 +13,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from . import bundles, emulator
+from . import bundles, emulator, trace
 from .services import (
     get_current_revision,
     get_latest_revision_path,
@@ -912,3 +912,102 @@ class SharedFlowBulkDeleteView(APIView):
         environment = payload.get("environment") or settings.APIGEE_ENVIRONMENT
         body, code = _delete_and_deploy(flows, environment, bundles.SHAREDFLOW)
         return Response(body, status=code)
+
+
+# ── Trace (sesiones de depuracion) ──────────────────────────────────────────
+# El emulador expone la misma traza que la consola de Apigee. Estas vistas la
+# arrancan y devuelven ya normalizada para que la UI la pinte como linea de tiempo.
+
+
+class ProxyTraceStartView(APIView):
+    """Abre una sesion de depuracion sobre un proxy."""
+
+    @extend_schema(
+        summary="Inicia una sesion de trace",
+        description=(
+            "Llama a `POST /v1/emulator/trace?proxyName=<proxy>` del emulador. Devuelve "
+            "el id de sesion, cuantas transacciones captura y en cuantos segundos "
+            "caduca. A partir de ese momento, cada peticion al proxy queda registrada."
+        ),
+        responses={201: dict, 502: dict},
+    )
+    def post(self, request, proxy_name):
+        try:
+            session = emulator.start_trace(proxy_name)
+        except emulator.EmulatorError as exc:
+            logger.error(f"No se pudo iniciar el trace de '{proxy_name}': {exc}")
+            return Response(
+                {"error": exc.message, "detail": exc.detail},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        logger.info(f"Sesion de trace abierta para '{proxy_name}': {session.get('name')}")
+
+        # Los basepaths reales los sabe el emulador; la UI los usa para sugerir
+        # la petición de prueba con la que disparar la traza.
+        basepaths = []
+        try:
+            basepaths = sorted(
+                {
+                    "/" + str(d.get("basePath", "")).lstrip("/")
+                    for d in emulator.get_tree()
+                    if d.get("application") == proxy_name
+                }
+            )
+        except emulator.EmulatorError as exc:
+            logger.warning(f"No se pudieron leer los basepaths de '{proxy_name}': {exc}")
+
+        return Response(
+            {
+                "proxy": proxy_name,
+                "sessionId": session.get("name"),
+                "count": session.get("count"),
+                "traceSize": session.get("traceSize"),
+                "timeoutInSeconds": session.get("timeoutInSeconds"),
+                "basepaths": basepaths,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ProxyTraceTransactionsView(APIView):
+    """Devuelve las transacciones capturadas, ya aplanadas en pasos."""
+
+    @extend_schema(
+        summary="Transacciones de una sesion de trace",
+        description=(
+            "Recupera la traza del emulador y la normaliza: por cada peticion devuelve "
+            "la lista ordenada de pasos (politicas ejecutadas, condiciones evaluadas, "
+            "cambios de estado) con las variables leidas y escritas en cada uno.\n\n"
+            "Con `raw=true` se devuelve el JSON del emulador sin tocar, y con "
+            "`verbose=true` se incluyen las variables de infraestructura que por "
+            "defecto se filtran."
+        ),
+        parameters=[
+            OpenApiParameter("raw", bool, description="Devuelve la traza sin normalizar."),
+            OpenApiParameter("verbose", bool, description="Incluye variables internas."),
+        ],
+        responses={200: dict, 502: dict},
+    )
+    def get(self, request, proxy_name, session_id):
+        try:
+            raw = emulator.get_trace_transactions(session_id)
+        except emulator.EmulatorError as exc:
+            logger.error(f"No se pudieron leer las transacciones de '{session_id}': {exc}")
+            return Response(
+                {"error": exc.message, "detail": exc.detail},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        if _as_bool(request.query_params.get("raw")):
+            return Response(raw)
+
+        # El trace solo trae el nombre de la politica; el tipo sale del bundle.
+        policy_types = trace.policy_types_for(get_proxy_file_tree(proxy_name))
+        normalized = trace.normalize_transactions(
+            raw,
+            policy_types=policy_types,
+            include_noisy=_as_bool(request.query_params.get("verbose")),
+        )
+
+        return Response({"proxy": proxy_name, **normalized})

@@ -33,6 +33,8 @@ from APIs.views import (
     ProxyDeployedListView,
     ProxyFileListView,
     ProxyFileUpdateView,
+    ProxyTraceStartView,
+    ProxyTraceTransactionsView,
     SharedFlowBulkDeleteView,
     SharedFlowDeployedListView,
     SharedFlowDetailView,
@@ -58,6 +60,12 @@ urlpatterns = [
     path("v1/proxies/<str:proxy_name>/files", ProxyFileListView.as_view()),
     # Guarda los archivos editados en la UI y redespliega el proxy
     path("v1/proxies/<str:proxy_name>/update", ProxyFileUpdateView.as_view()),
+    # Abre una sesión de trace sobre el proxy y consulta lo capturado
+    path("v1/proxies/<str:proxy_name>/trace", ProxyTraceStartView.as_view()),
+    path(
+        "v1/proxies/<str:proxy_name>/trace/<str:session_id>",
+        ProxyTraceTransactionsView.as_view(),
+    ),
     # POST importa un bundle de shared flow y lo despliega
     path(
         "v1/organizations/<str:org>/sharedflows",

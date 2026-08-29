@@ -151,3 +151,23 @@ def get_version() -> Dict[str, Any]:
     """Devuelve la versión del emulador y el environment activo."""
     result = _request("/v1/emulator/version")
     return result if isinstance(result, dict) else {}
+
+
+def start_trace(proxy_name: str) -> Dict[str, Any]:
+    """Abre una sesión de depuración para un proxy en el emulador.
+
+    Args:
+        proxy_name: Proxy a instrumentar.
+
+    Returns:
+        Dict[str, Any]: ``name`` (id de sesión), ``traceSize``, ``count`` y
+        ``timeoutInSeconds``.
+    """
+    result = _request(f"/v1/emulator/trace?proxyName={proxy_name}", method="POST")
+    return result if isinstance(result, dict) else {}
+
+
+def get_trace_transactions(session_id: str) -> Dict[str, Any]:
+    """Devuelve las transacciones capturadas por una sesión de depuración."""
+    result = _request(f"/v1/emulator/trace/transactions?sessionid={session_id}")
+    return result if isinstance(result, dict) else {}

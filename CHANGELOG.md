@@ -27,6 +27,15 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
   la lista exacta y borra del workspace y del runtime del emulador.
 - `DELETE /v1/organizations/{org}/apis/{proxy}` y `POST /v1/proxies/delete`: el borrado en
   bloque genera una sola revisión, y si el emulador rechaza el contrato todo se restaura.
+- Viñeta **Trace** del editor de proxies: abre una sesión de depuración en el emulador y
+  muestra, por cada petición, la línea de tiempo del flujo (políticas con su tipo y offset,
+  condiciones con su resultado, cambios de estado) y las variables leídas y escritas en cada
+  paso, junto al mensaje tal como estaba en ese instante.
+- `POST /v1/proxies/{proxy}/trace` y `GET /v1/proxies/{proxy}/trace/{sessionId}`, apoyados
+  en la API de trace no documentada del emulador.
+- `APIs/trace.py`: aplana el formato de debug session de Apigee (unos 40 puntos por
+  petición) en pasos legibles, descartando las ejecuciones internas del motor y las
+  variables de infraestructura. `?raw=true` y `?verbose=true` los recuperan.
 - Shared flows con el mismo ciclo que los proxies: alta por bundle desde **+ Nuevo Flow**,
   guardado + despliegue desde el editor con chip de estado, y borrado individual o múltiple
   desde la tabla.
@@ -42,6 +51,8 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
   sharedflows al desplegar.
 
 ### Corrección
+- Las viñetas del editor de proxies (*Develop*, *Trace*, *Performance*) solo cambiaban el
+  estilo del botón: `activeTab` no condicionaba el cuerpo, así que pulsarlas no hacía nada.
 - El árbol de archivos de un shared flow se leía desde la carpeta del flow y no desde
   `sharedflowbundle/`, así que devolvía rutas con el prefijo del bundle. Al guardar, esa
   ruta se resolvía otra vez dentro del bundle y creaba

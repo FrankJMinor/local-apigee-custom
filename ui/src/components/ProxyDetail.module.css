@@ -1404,3 +1404,15 @@
   border-color: #3b82f6;
   box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
 }
+
+/* Pestana sin contenido disponible todavia */
+.tabPlaceholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4em 2em;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  text-align: center;
+}

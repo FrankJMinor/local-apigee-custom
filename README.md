@@ -126,6 +126,62 @@ Se aceptan las dos formas habituales de empaquetado: `apiproxy/...` en la raíz
 del ZIP (formato oficial de Apigee) y `MiProxy/apiproxy/...` (comprimir la
 carpeta del proxy).
 
+### Trace: depurar el flujo del proxy
+
+La viñeta **Trace** del editor de proxies abre una sesión de depuración en el
+emulador. Mientras está viva, cada petición al proxy queda registrada y la UI
+muestra tres columnas: las peticiones capturadas, la línea de tiempo del flujo y
+el detalle del paso seleccionado.
+
+En la línea de tiempo aparece cada política ejecutada con su tipo y su offset en
+milisegundos, las condiciones de enrutado con su resultado, y los cambios de
+estado del motor. Al pulsar un paso se ve **qué variables leyó y escribió** y el
+mensaje tal como estaba en ese instante. Por ejemplo, en una política
+`AssignMessage` se ve literalmente el payload escribiéndose:
+
+```
+SetResponse — Política · AssignMessage
+  VARIABLES ESCRITAS
+    message.content              { "mensaje": "¡Exito! Leyendo desde KVM local" }
+    message.header.Content-Type  application/json
+```
+
+Antes, las tres viñetas del editor (*Develop*, *Trace*, *Performance*) solo
+cambiaban el estilo del botón: `activeTab` no condicionaba el cuerpo, así que
+pulsarlas no hacía nada. Ahora *Develop* y *Trace* renderizan contenido propio.
+
+**La API de trace del emulador**
+
+| Método | Ruta                                             | Uso                                  |
+|--------|--------------------------------------------------|--------------------------------------|
+| `POST` | `/v1/emulator/trace?proxyName=<proxy>`           | Abre la sesión; devuelve su id       |
+| `GET`  | `/v1/emulator/trace/transactions?sessionid=<id>` | Transacciones capturadas             |
+
+La sesión caduca sola (`timeoutInSeconds`, 600 por defecto) y captura como máximo
+`count` transacciones (50). No hay endpoint para cerrarla antes de tiempo: el
+botón *Detener* de la UI solo deja de consultar.
+
+**Por qué el backend normaliza la traza**
+
+El emulador devuelve el mismo formato de *debug session* que la consola de Apigee:
+una lista de `point`, cada uno con `results` de tipo `DebugInfo`,
+`VariableAccess`, `RequestMessage` o `ResponseMessage`. Es fiel pero incómodo: una
+petición sencilla genera unos 40 puntos y la mayoría son ruido de infraestructura
+(publicadores de analytics, CORS, mint).
+
+`APIs/trace.py` lo aplana en transacciones con pasos ordenados, descarta esas
+ejecuciones internas y filtra las variables de infraestructura (`analytics.`,
+`apigee.`, `system.`…). Con `?verbose=true` se incluyen, y con `?raw=true` se
+devuelve el JSON del emulador sin tocar. El nombre de la política es lo único que
+trae el trace: el tipo (`KeyValueMapOperations`, `AssignMessage`) se cruza con el
+bundle desplegado.
+
+| Método | Ruta                                          | Uso                          |
+|--------|-----------------------------------------------|------------------------------|
+| `POST` | `/v1/proxies/{proxy}/trace`                   | Inicia la sesión             |
+| `GET`  | `/v1/proxies/{proxy}/trace/{sessionId}`       | Transacciones normalizadas   |
+
+
 ### Shared flows: mismo ciclo que los proxies
 
 La pantalla *Shared Flows* tiene ahora las tres operaciones de la de proxies:
