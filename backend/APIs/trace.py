@@ -33,6 +33,8 @@ TIMESTAMP_PATTERN = re.compile(r"^(\d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}):(\d{1,3}
 # Ejecuciones internas del motor que no aportan nada al depurar un proxy.
 INTERNAL_EXECUTION_TYPES = {
     "ApiSecurityAction",
+    # Envoltorio del flow hook: el punto con información es el FlowCallout.
+    "FlowHookAction",
     "EchoRequestExecution",
     "CORSResponseOrErrorFlowExecution",
     "MintExecution",
@@ -143,6 +145,15 @@ def _classify(point_id: str, props: Dict[str, str]) -> Dict[str, Optional[str]]:
         # FlowInfo solo aporta si trae variables; sus propiedades son metadatos.
         return {"kind": "flow", "title": "FlowInfo"}
 
+    if point_id == "FlowCallout":
+        # Un flow hook del environment o un FlowCallout explícito del proxy.
+        # El emulador lo nombra "PreProxyFlowHook->sf-test".
+        return {"kind": "flowhook", "title": props.get("shared.flow.name") or "FlowCallout"}
+
+    if point_id == "FlowReturn":
+        # Cierra el tramo abierto por el FlowCallout; no se pinta como paso.
+        return {"kind": "flowreturn", "title": props.get("shared.flow.name") or "FlowReturn"}
+
     if point_id in {"Paused", "Resumed"}:
         return {"kind": "transport", "title": point_id}
 
@@ -217,6 +228,12 @@ def _build_step(
     if kind == "policy":
         # El trace solo da el nombre; el tipo lo sacamos del bundle desplegado.
         step["policyType"] = policy_types.get(title)
+    elif kind in {"flowhook", "flowreturn"}:
+        # "PreProxyFlowHook->sf-test": el gancho y el shared flow que invoca.
+        hook, _, shared = (title or "").partition("->")
+        step["hookName"] = hook or None
+        step["sharedFlow"] = shared or None
+        step["title"] = shared or hook or title
     elif kind == "condition":
         step["expressionResult"] = props.get("ExpressionResult")
         step["tree"] = props.get("Tree")
@@ -279,6 +296,25 @@ def normalize_transactions(
             step = _build_step(point, include_noisy, policy_types)
             if step:
                 steps.append(step)
+
+        if not steps:
+            continue
+
+        # Todo lo que ocurre entre FlowCallout y FlowReturn se ejecuta dentro del
+        # shared flow. Se marca para que el mapa lo agrupe visualmente; el
+        # FlowReturn se descarta después, cuando ya cerró el tramo.
+        inside = None
+        for step in steps:
+            if step["kind"] == "flowhook":
+                inside = step.get("sharedFlow") or step.get("title")
+                step["flowHook"] = inside
+            elif step["kind"] == "flowreturn":
+                step["flowHook"] = inside
+                inside = None
+            else:
+                step["flowHook"] = inside
+
+        steps = [step for step in steps if step["kind"] != "flowreturn"]
 
         if not steps:
             continue

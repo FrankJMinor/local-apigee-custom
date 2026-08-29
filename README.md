@@ -150,6 +150,49 @@ Antes, las tres viñetas del editor (*Develop*, *Trace*, *Performance*) solo
 cambiaban el estilo del botón: `activeTab` no condicionaba el cuerpo, así que
 pulsarlas no hacía nada. Ahora *Develop* y *Trace* renderizan contenido propio.
 
+#### El Transaction Map
+
+La traza se pinta como el *Transaction Map* de Apigee Edge: dos carriles
+horizontales —**Solicitud** y **Respuesta**— con una baldosa por paso, y el
+detalle debajo a todo lo ancho. El corte entre carriles lo marca el primer estado
+de respuesta que reporta el emulador (`PROXY_RESP_FLOW`, `RESP_SENT`…).
+
+Cada baldosa lleva el color de la **categoría** de la política y su icono. El
+catálogo de Apigee ronda los 60 tipos (ver `backend/templates/`) y en `ui/icons`
+hay 12 SVG, así que `ui/src/utils/policyVisuals.js` sigue el mismo criterio que
+Edge: SVG cuando existe, y si no, el color de la categoría con las siglas del
+tipo (`ExtractVariables` → `EV`). La categoría se reconoce por el color y la
+política concreta por las siglas, sin depender de tener un icono por tipo.
+
+| Categoría | Color | Ejemplos |
+|---|---|---|
+| Mediation | azul | AssignMessage, ExtractVariables, KVM, RaiseFault |
+| Security | naranja | VerifyAPIKey, OAuthV2, JWT, ThreatProtection |
+| Traffic Management | morado | Quota, SpikeArrest, Cache |
+| Extension | amarillo | JavaScript, ServiceCallout, FlowCallout |
+| AI / Dialogflow | turquesa | LLMTokenQuota, SemanticCache |
+| Flow hook | verde | shared flows enganchados al environment |
+
+Los cambios de estado del motor se dibujan como puntos pequeños en lugar de
+baldosas: son marcas del flujo, no políticas.
+
+**Flow hooks.** Aparecen sobre una banda verde con borde discontinuo y el nombre
+del shared flow encima, para distinguir de un vistazo lo que no vive en el bundle
+del proxy. En la traza el emulador los reporta como un punto `FlowCallout` con
+`shared.flow.name: "PreProxyFlowHook->sf-test"` y un `FlowReturn` que lo cierra;
+todo lo que ocurre entre ambos se marca como perteneciente al hook y se agrupa en
+la misma banda. El `FlowReturn` no se pinta: solo delimita el tramo.
+
+Para verlos hay que tener ganchos configurados en el environment. Por defecto
+`flowhooks.json` está vacío; un ejemplo:
+
+```json
+{
+  "PreProxyFlowHook": { "continueOnError": true, "sharedFlow": "sf-test" }
+}
+```
+
+
 #### Actualización automática: por qué SSE y no WebSocket
 
 Cuando llega una petición al proxy, la página se actualiza sola: no hay que pulsar

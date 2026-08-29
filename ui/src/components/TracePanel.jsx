@@ -8,6 +8,7 @@ import {
   formatCountdown,
   STEP_STYLES,
 } from '../utils/traceSession'
+import { visualFor, splitPhases } from '../utils/policyVisuals'
 import s from './TracePanel.module.css'
 
 /** Respaldo por sondeo si el navegador o el proxy no dejan pasar el SSE. */
@@ -82,6 +83,91 @@ function MessageBlock({ title, message }) {
 }
 
 MessageBlock.propTypes = { title: PropTypes.string.isRequired, message: PropTypes.object }
+
+/**
+ * Una casilla del Transaction Map.
+ *
+ * Reproduce la baldosa de la traza de Apigee Edge: color por categoria de
+ * politica, con el SVG cuando existe y las siglas cuando no.
+ */
+function MapTile({ step, active, onSelect }) {
+  const visual = visualFor(step)
+  const isState = step.kind === 'state'
+
+  return (
+    <button
+      className={`${s.tile} ${active ? s.tileActive : ''} ${isState ? s.tileState : ''}`}
+      style={{ '--tile-color': visual.color }}
+      onClick={onSelect}
+      title={`${step.title}${step.policyType ? ` (${step.policyType})` : ''}`}
+    >
+      {visual.icon ? (
+        <img src={visual.icon} alt="" className={s.tileIcon} />
+      ) : (
+        <span className={s.tileLabel}>{visual.label}</span>
+      )}
+    </button>
+  )
+}
+
+MapTile.propTypes = {
+  step: PropTypes.object.isRequired,
+  active: PropTypes.bool,
+  onSelect: PropTypes.func.isRequired,
+}
+
+/**
+ * Un carril del mapa: los pasos de una fase, unidos por el riel.
+ *
+ * Los pasos que ocurren dentro de un flow hook se agrupan sobre una banda mas
+ * clara, para distinguir de un vistazo lo que viene del shared flow.
+ */
+function MapRail({ label, steps, selectedIndex, onSelect }) {
+  if (!steps.length) return null
+
+  // Tramos consecutivos: o todos dentro del mismo flow hook, o ninguno.
+  const groups = []
+  steps.forEach(step => {
+    const hook = step.flowHook || null
+    const last = groups[groups.length - 1]
+    if (last && last.hook === hook) last.steps.push(step)
+    else groups.push({ hook, steps: [step] })
+  })
+
+  return (
+    <div className={s.rail}>
+      <span className={s.railLabel}>{label}</span>
+      <div className={s.railTrack}>
+        {groups.map((group, gi) => (
+          <div
+            key={`${group.hook || 'main'}-${gi}`}
+            className={`${s.railGroup} ${group.hook ? s.railGroupHook : ''}`}
+            title={group.hook ? `Flow hook: ${group.hook}` : undefined}
+          >
+            {group.hook && <span className={s.hookTag}>{group.hook}</span>}
+            <div className={s.railTiles}>
+              {group.steps.map(step => (
+                <MapTile
+                  key={step.index}
+                  step={step}
+                  active={step.index === selectedIndex}
+                  onSelect={() => onSelect(step.index)}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+MapRail.propTypes = {
+  label: PropTypes.string.isRequired,
+  steps: PropTypes.array.isRequired,
+  selectedIndex: PropTypes.number,
+  onSelect: PropTypes.func.isRequired,
+}
 
 /**
  * Panel de Trace del editor de proxies.
@@ -184,6 +270,7 @@ export function TracePanel({ proxyName, basePath }) {
 
   const tx = transactions[selectedTx]
   const step = tx?.steps?.[selectedStep]
+  const phases = splitPhases(tx?.steps || [])
   const live = Boolean(session) && secondsLeft > 0
   const sampleUrl = `http://localhost:8445${basePath && basePath !== '-' ? basePath : ''}`
 
@@ -301,41 +388,41 @@ export function TracePanel({ proxyName, basePath }) {
             ))}
           </div>
 
-          {/* Línea de tiempo del flujo */}
-          <div className={s.timeline}>
-            <div className={s.colHeader}>Flujo de ejecución</div>
-            {tx?.steps.map((st, i) => {
-              const style = STEP_STYLES[st.kind] || STEP_STYLES.state
-              const reads = st.variables.read.length
-              const writes = st.variables.written.length
-              return (
-                <button
-                  key={`${st.pointId}-${i}`}
-                  className={`${s.stepItem} ${i === selectedStep ? s.stepItemActive : ''}`}
-                  onClick={() => setSelectedStep(i)}
-                >
-                  <span className={s.stepRail} style={{ background: style.color }} />
-                  <span className={s.stepOffset}>
-                    {st.offsetMs !== null ? `+${st.offsetMs}ms` : '—'}
-                  </span>
-                  <span className={s.stepMain}>
-                    <span className={s.stepTitle}>{st.title}</span>
-                    <span className={s.stepSub}>
-                      <span style={{ color: style.color }}>{style.label}</span>
-                      {st.policyType && <> · {st.policyType}</>}
-                      {st.kind === 'condition' && (
-                        <> · <span className={st.expressionResult === 'true' ? s.condTrue : s.condFalse}>
-                          {st.expressionResult}
-                        </span></>
-                      )}
-                      {(reads > 0 || writes > 0) && (
-                        <> · <span className={s.varRead}>{reads}↓</span> <span className={s.varWrite}>{writes}↑</span></>
-                      )}
-                    </span>
-                  </span>
-                </button>
-              )
-            })}
+          {/* A la derecha: el mapa arriba a todo lo ancho y el detalle debajo,
+              como en la traza de Apigee Edge */}
+          <div className={s.rightPane}>
+          <div className={s.mapColumn}>
+            <div className={s.colHeader}>Transaction Map</div>
+            <div className={s.mapScroll}>
+              <MapRail
+                label="Solicitud"
+                steps={phases.request}
+                selectedIndex={selectedStep}
+                onSelect={setSelectedStep}
+              />
+              <MapRail
+                label="Respuesta"
+                steps={phases.response}
+                selectedIndex={selectedStep}
+                onSelect={setSelectedStep}
+              />
+            </div>
+
+            {/* El paso elegido, con su nombre y tiempo, bajo el mapa */}
+            {step && (
+              <div className={s.mapSelected}>
+                <span className={s.mapSelectedTitle}>{step.title}</span>
+                <span className={s.mapSelectedMeta}>
+                  {(STEP_STYLES[step.kind] || {}).label}
+                  {step.policyType ? ` · ${step.policyType}` : ''}
+                  {step.flowHook ? ` · flow hook: ${step.flowHook}` : ''}
+                  {step.offsetMs !== null ? ` · +${step.offsetMs} ms` : ''}
+                  {step.kind === 'condition' && step.expressionResult
+                    ? ` · ${step.expressionResult}`
+                    : ''}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Detalle del paso seleccionado */}
@@ -377,8 +464,9 @@ export function TracePanel({ proxyName, basePath }) {
                   )}
               </div>
             ) : (
-              <p className={s.detailEmpty}>Selecciona un paso de la línea de tiempo.</p>
+              <p className={s.detailEmpty}>Selecciona un paso del Transaction Map.</p>
             )}
+          </div>
           </div>
         </div>
       )}

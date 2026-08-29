@@ -41,6 +41,12 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
   cuenta, así que sondea el backend y solo empuja al navegador cuando hay cambios; si el
   stream no se establece, la UI cae a sondeo cada 2,5 s y lo indica con una insignia.
 - El cronómetro de la sesión de trace se muestra en `m:ss` en lugar de solo segundos.
+- La traza se visualiza como el *Transaction Map* de Apigee Edge: carriles de Solicitud y
+  Respuesta con una baldosa por paso, coloreada por categoría de política, y el detalle a
+  todo lo ancho debajo. `ui/src/utils/policyVisuals.js` mapea el catálogo completo a los
+  SVG de `ui/icons`, con color de categoría y siglas del tipo para los que no tienen icono.
+- Los flow hooks se reconocen en la traza (`FlowCallout` / `FlowReturn`) y se agrupan sobre
+  una banda verde con el nombre del shared flow, junto con todo lo que se ejecuta dentro.
 - Shared flows con el mismo ciclo que los proxies: alta por bundle desde **+ Nuevo Flow**,
   guardado + despliegue desde el editor con chip de estado, y borrado individual o múltiple
   desde la tabla.
