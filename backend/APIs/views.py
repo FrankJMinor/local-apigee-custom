@@ -19,7 +19,7 @@ from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from . import bundles, edge, emulator, kvms, trace
+from . import bundles, dashboard, edge, emulator, kvms, trace
 from .services import (
     get_current_revision,
     get_latest_revision_path,
@@ -1784,3 +1784,29 @@ def _edge_status(exc):
         return status.HTTP_400_BAD_REQUEST
     # VPN caída, TLS o error remoto: el fallo está aguas arriba, no en la petición.
     return status.HTTP_502_BAD_GATEWAY
+
+
+class DashboardSummaryView(APIView):
+    """Todo lo que pinta el dashboard, leído del estado real del entorno."""
+
+    @extend_schema(
+        summary="Resumen del entorno local para el dashboard",
+        description=(
+            "Devuelve los totales (proxies enrutados, shared flows, KVM y llaves), "
+            "la actividad reciente y las alertas, todo derivado del estado en disco "
+            "y del runtime del emulador.\n\n"
+            "El emulador no guarda un historial de operaciones, así que la actividad "
+            "se reconstruye de tres fuentes fechables: las carpetas de revisión en "
+            "`sdlc/contracts`, la fecha del archivo más reciente de cada bundle del "
+            "workspace y el `lastModifiedAt` de cada KVM."
+        ),
+        parameters=[OpenApiParameter("environment", str, description="Environment a resumir.")],
+        responses={200: dict, 400: dict},
+    )
+    def get(self, request):
+        environment = request.query_params.get("environment") or settings.APIGEE_ENVIRONMENT
+
+        try:
+            return Response(dashboard.summary(environment))
+        except kvms.KvmError as exc:
+            return _kvm_error(exc)

@@ -49,6 +49,19 @@
   color: var(--text-muted);
 }
 
+.errorBanner {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.75em 1.1em;
+  border-radius: 10px;
+  font-size: 0.86em;
+  margin-bottom: 1.2em;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
+
 /* ── Panels ── */
 .panels {
   display: grid;
@@ -76,6 +89,11 @@
   font-weight: 700;
   color: var(--text-primary);
 }
+.panelEmpty {
+  font-size: 0.86em;
+  color: var(--text-muted);
+  padding: 1.5em 0;
+}
 
 /* ── Activity ── */
 .activityList {
@@ -97,10 +115,21 @@
   flex-shrink: 0;
   margin-top: 5px;
 }
+.activityBody {
+  min-width: 0;
+}
 .activityAction {
   font-size: 0.9em;
   color: var(--text-primary);
   font-weight: 500;
+}
+.activityDetail {
+  font-size: 0.78em;
+  color: var(--text-muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .activityTime {
   font-size: 0.78em;
@@ -135,5 +164,6 @@
 }
 .alertDetail {
   font-size: 0.8em;
-  color: var(--accent);
+  color: var(--text-secondary);
+  line-height: 1.45;
 }

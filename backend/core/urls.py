@@ -27,6 +27,7 @@ from APIs.views import (
     ApigeeOrganizationSharedFlowsImportView,
     ApigeePolicyMenuView,
     ApigeeProxyDetailView,
+    DashboardSummaryView,
     EdgeEnvironmentsView,
     EmulatorDeployView,
     EmulatorStatusView,
@@ -104,6 +105,8 @@ urlpatterns = [
     path("v1/sharedflows/<str:shared_flow_name>/update", SharedFlowFileUpdateView.as_view()),
     # Ruta para obtener el menú de políticas
     path("v1/policies/menu", ApigeePolicyMenuView.as_view()),
+    # Resumen del entorno para el dashboard: totales, actividad y alertas reales
+    path("v1/dashboard", DashboardSummaryView.as_view()),
     # ── Key Value Maps ────────────────────────────────────────────────────────
     # Catálogo que consume la tabla de la UI: los dos scopes en una llamada, ya
     # cruzados con los KVM que el contenedor del emulador tiene cargados.

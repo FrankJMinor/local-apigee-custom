@@ -114,6 +114,16 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
 - Barra de progreso durante la importación desde Edge. El backend admite `"stream": true` y
   emite el avance como Server-Sent Events; la UI lo lee con `fetch` y un lector de stream, ya
   que las credenciales viajan en el cuerpo del POST y `EventSource` solo hace GET.
+- El dashboard deja de pintar datos inventados. `GET /v1/dashboard` (módulo `APIs/dashboard.py`)
+  devuelve los totales reales —proxies enrutados, shared flows, KVM y llaves—, la actividad
+  reciente y las alertas.
+- Actividad reciente reconstruida del estado en disco, porque el emulador no guarda historial:
+  las carpetas de revisión de `sdlc/contracts` fechan los despliegues, el archivo más reciente
+  de cada bundle fecha su última edición y los KVM traen su propio `lastModifiedAt`. Los KVM
+  tocados en el mismo minuto se agrupan en un evento, para que una importación de ochenta no
+  tape el resto.
+- Las alertas del dashboard salen del estado real: emulador sin responder, KVM sin cargar en el
+  runtime, llaves que el emulador no admite o ninguna revisión desplegada.
 
 ### Cambiado
 - La unicidad de nombres de KVM y de llave pasa a distinguir mayúsculas, como hace el emulador

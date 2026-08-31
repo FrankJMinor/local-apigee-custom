@@ -101,6 +101,33 @@ Para simular KVMs de la nube, se debe crear el archivo `./environments/apigee-de
 ]
 ```
 
+### El dashboard
+
+Los totales, la actividad reciente y las alertas salen de `GET /v1/dashboard`, no
+de datos de ejemplo.
+
+| Tarjeta | Valor | Detalle |
+| --- | --- | --- |
+| API Proxies | aplicaciones con endpoints enrutados | endpoints activos según `/v1/emulator/tree` |
+| Shared Flows | bundles del workspace | environment activo |
+| Key Value Maps | KVM de los dos scopes | total de llaves |
+
+**Actividad reciente.** El emulador no guarda un historial de operaciones, así que
+se reconstruye de tres fuentes fechables:
+
+* Las carpetas de `sdlc/contracts/<N>`: cada una es un despliegue, y su fecha es
+  la del despliegue. Se marca cuál es el contrato activo.
+* El archivo más reciente del bundle de cada proxy y shared flow: su última
+  edición.
+* El `lastModifiedAt` de cada KVM. Los que se tocaron en el mismo minuto se
+  agrupan en un solo evento, porque una importación desde Edge actualiza decenas
+  a la vez y taparía todo lo demás.
+
+**Alertas.** Se derivan del estado, no de una lista fija: el emulador sin
+responder, KVM que están en el workspace pero no cargados en el runtime, llaves
+que el emulador no admite, o que no haya ninguna revisión desplegada. Si no hay
+nada que avisar, lo dice.
+
 ### Administrar KVMs desde la UI
 
 La pantalla *Key Value Maps* del menú **ADMIN** consulta los KVM del contenedor y
