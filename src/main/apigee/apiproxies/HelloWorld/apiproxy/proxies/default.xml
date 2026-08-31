@@ -12,7 +12,15 @@
             </Step>
         </Response>
     </PreFlow>
-    <Flows/>
+    <Flows>
+    
+        <Flow name="Test">
+            <Description>Prueba de desarrollo de flujo</Description>
+            <Request/>
+            <Response/>
+            <Condition>(proxy.pathsuffix MatchesPath "/test/data") and (request.verb = "GET")</Condition>
+        </Flow>
+    </Flows>
     <PostFlow name="PostFlow">
         <Request/>
         <Response/>
