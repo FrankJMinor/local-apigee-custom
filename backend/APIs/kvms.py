@@ -538,6 +538,147 @@ def delete_map(
     return removed, result
 
 
+def delete_maps(
+    names: Optional[List[str]] = None,
+    delete_all: bool = False,
+    environment: Optional[str] = None,
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Borra varios KVM de los dos scopes con una sola sincronización.
+
+    Encadenar :func:`delete_map` por cada nombre haría un ``setup/tests`` por
+    borrado; aquí se reescriben los archivos afectados y se sincroniza una vez.
+
+    Args:
+        names: Nombres a borrar. Se ignora si ``delete_all`` es verdadero.
+        delete_all: Borra todos los KVM de los dos scopes.
+        environment: Environment del scope de entorno.
+
+    Returns:
+        Tuple con el resumen (``deleted``, ``notFound``) y el resultado del sync.
+    """
+    env = environment or settings.APIGEE_ENVIRONMENT
+    wanted = {str(name).lower() for name in (names or [])}
+
+    if not delete_all and not wanted:
+        raise KvmError("No se recibió ningún KVM que eliminar.")
+
+    def marked(item: Dict[str, Any]) -> bool:
+        return delete_all or str(item.get("name", "")).lower() in wanted
+
+    deleted: List[str] = []
+    # Se respalda cada archivo tocado para poder revertir los dos si el sync falla.
+    touched: List[Tuple[str, List[Dict[str, Any]], List[Dict[str, Any]]]] = []
+
+    for scope in SCOPES:
+        path = kvm_file(scope, env)
+        previous = _load_for_write(path)
+        keep = [item for item in previous if not marked(item)]
+
+        if len(keep) == len(previous):
+            continue
+
+        deleted.extend(str(item.get("name", "")) for item in previous if marked(item))
+        touched.append((path, previous, keep))
+
+    if not touched:
+        raise KvmError("Ninguno de los KVM indicados existe en el workspace.")
+
+    for path, _, updated in touched:
+        _write_file(path, updated)
+
+    try:
+        result = sync(env)
+    except (KvmError, emulator.EmulatorError) as exc:
+        logger.error(f"Sincronización fallida tras el borrado múltiple, revirtiendo: {exc}")
+        for path, previous, _ in touched:
+            _write_file(path, previous)
+        try:
+            sync(env)
+        except (KvmError, emulator.EmulatorError) as restore_exc:
+            logger.error(f"No se pudo restaurar el estado previo del emulador: {restore_exc}")
+        raise
+
+    not_found = sorted(wanted - {name.lower() for name in deleted})
+    logger.info(f"Eliminados {len(deleted)} KVM: {deleted}")
+    return {"deleted": sorted(deleted), "notFound": not_found}, result
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Importación desde Apigee Edge
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def import_maps(
+    maps: List[Dict[str, Any]],
+    scope: str = SCOPE_ENVIRONMENT,
+    environment: Optional[str] = None,
+    replace: bool = False,
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Vuelca en el workspace los KVM traídos de Edge y los carga en el emulador.
+
+    Los nombres que el emulador no aceptaría se omiten en vez de abortar la
+    importación completa: en Edge puede haber KVM con nombres que aquí no valen,
+    y traerse los demás sigue siendo útil. Los omitidos se devuelven con su
+    motivo para poder mostrarlos.
+
+    Args:
+        maps: KVM en formato de workspace (``{"name", "encrypted", "entry"}``).
+        scope: Scope local donde dejarlos.
+        environment: Environment del scope de entorno.
+        replace: Si es verdadero, deja solo lo importado y descarta el resto.
+
+    Returns:
+        Tuple con el resumen (``created``, ``updated``, ``skipped``) y el sync.
+    """
+    scope = normalize_scope(scope)
+    env = environment or settings.APIGEE_ENVIRONMENT
+    path = kvm_file(scope, env)
+    previous = _load_for_write(path)
+    now = _now_millis()
+
+    updated: List[Dict[str, Any]] = [] if replace else [dict(item) for item in previous]
+    created: List[str] = []
+    refreshed: List[str] = []
+    skipped: List[Dict[str, str]] = []
+
+    for raw in maps:
+        try:
+            name = validate_name(str(raw.get("name", "")), "KVM")
+            entries = _validate_entries(raw.get("entry", raw.get("entries")))
+        except KvmError as exc:
+            skipped.append({"name": str(raw.get("name", "?")), "reason": str(exc)})
+            continue
+
+        index = _index_of(updated, name)
+        record = {
+            "name": name if index is None else str(updated[index].get("name", name)),
+            "encrypted": bool(raw.get("encrypted", False)),
+            "entry": entries,
+            "createdAt": now if index is None else updated[index].get("createdAt", now),
+            "lastModifiedAt": now,
+        }
+
+        if index is None:
+            updated.append(record)
+            created.append(record["name"])
+        else:
+            updated[index] = record
+            refreshed.append(record["name"])
+
+    if not created and not refreshed:
+        raise KvmError(
+            "No se importó ningún KVM: "
+            + (skipped[0]["reason"] if skipped else "Edge no devolvió ninguno.")
+        )
+
+    result = _save_and_sync(path, previous, updated, env)
+    logger.info(
+        f"Importados desde Edge: {len(created)} nuevos, {len(refreshed)} actualizados, "
+        f"{len(skipped)} omitidos"
+    )
+    return {"created": created, "updated": refreshed, "skipped": skipped}, result
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # CRUD de llaves
 # ──────────────────────────────────────────────────────────────────────────────

@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ScopeBadge } from '../components/StatusBadge'
-import { IconRefresh, IconEdit, IconTrash, IconKVM, IconCloud, IconWarning } from '../components/Icons'
+import {
+  IconRefresh, IconEdit, IconTrash, IconKVM, IconCloud, IconWarning, IconCheck, IconX,
+} from '../components/Icons'
 import { NewKvmModal } from '../components/NewKvmModal'
+import { EdgeSyncModal } from '../components/EdgeSyncModal'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { formatDate } from '../utils/format'
-import { fetchKvmCatalog, deleteKvm, syncKvms } from '../utils/kvmApi'
+import { fetchKvmCatalog, deleteKvm, deleteKvms, syncKvms } from '../utils/kvmApi'
 import s from './table.module.css'
 import k from './KeyValueMaps.module.css'
 
@@ -16,9 +19,17 @@ function KeyValueMaps() {
   const [catalog, setCatalog] = useState({ keyValueMaps: [], environment: '', runtimeAvailable: true })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [modalOpen, setModalOpen] = useState(false)
-  const [pendingDelete, setPendingDelete] = useState(null)
+  const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
+
+  const [modalOpen, setModalOpen] = useState(false)
+  const [edgeOpen, setEdgeOpen] = useState(false)
+
+  // Las casillas solo aparecen al entrar en modo selección: en el uso normal
+  // de la tabla estorban y se marcan sin querer.
+  const [selecting, setSelecting] = useState(false)
+  const [selected, setSelected] = useState(() => new Set())
+  const [pendingDelete, setPendingDelete] = useState(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -34,11 +45,18 @@ function KeyValueMaps() {
 
   useEffect(() => { load() }, [load])
 
-  const handleSync = async () => {
+  const exitSelection = () => {
+    setSelecting(false)
+    setSelected(new Set())
+  }
+
+  const handleReload = async () => {
     setBusy(true)
     setError('')
+    setNotice('')
     try {
-      await syncKvms(catalog.environment)
+      const result = await syncKvms(catalog.environment)
+      setNotice(`${result.synced} KVM recargados en el emulador.`)
       load()
     } catch (err) {
       setError(err.message)
@@ -47,12 +65,24 @@ function KeyValueMaps() {
     }
   }
 
-  const handleDelete = async () => {
+  const confirmDelete = async () => {
     setBusy(true)
     setError('')
+    setNotice('')
     try {
-      await deleteKvm(pendingDelete.scope, catalog.environment, pendingDelete.name)
+      if (pendingDelete.mode === 'one') {
+        await deleteKvm(pendingDelete.row.scope, catalog.environment, pendingDelete.row.name)
+        setNotice(`KVM "${pendingDelete.row.name}" eliminado.`)
+      } else {
+        const result = await deleteKvms({
+          names: pendingDelete.mode === 'selected' ? pendingDelete.names : undefined,
+          all: pendingDelete.mode === 'all',
+          environment: catalog.environment,
+        })
+        setNotice(`${result.deleted.length} KVM eliminados.`)
+      }
       setPendingDelete(null)
+      exitSelection()
       load()
     } catch (err) {
       setError(err.message)
@@ -74,9 +104,28 @@ function KeyValueMaps() {
       .includes(searchLower)
   })
 
+  const visibleNames = filtered.map(row => row.name)
+  const allVisibleSelected =
+    visibleNames.length > 0 && visibleNames.every(name => selected.has(name))
+
+  const toggleOne = name => setSelected(prev => {
+    const next = new Set(prev)
+    if (next.has(name)) next.delete(name); else next.add(name)
+    return next
+  })
+
+  // La casilla de la cabecera solo alterna lo que el filtro tiene a la vista.
+  const toggleAllVisible = () => setSelected(prev => {
+    const next = new Set(prev)
+    if (allVisibleSelected) visibleNames.forEach(n => next.delete(n))
+    else visibleNames.forEach(n => next.add(n))
+    return next
+  })
+
   // Un KVM sin cargar en el runtime existe en el workspace pero el emulador
   // todavía no lo tiene: las políticas KeyValueMapOperations no lo verían.
   const outOfSync = maps.filter(row => !row.inSync).length
+  const columnCount = selecting ? 8 : 7
 
   return (
     <div>
@@ -89,11 +138,11 @@ function KeyValueMaps() {
           </p>
         </div>
         <div className={s.pageActions}>
-          <button className={s.btnSecondary} onClick={handleSync} disabled={busy || loading}>
-            <IconCloud size={14} /> {busy ? 'Sincronizando…' : 'Sincronizar'}
+          <button className={s.btnSecondary} onClick={handleReload} disabled={busy || loading}>
+            <IconRefresh size={14} /> {busy ? 'Trabajando…' : 'Recargar en emulador'}
           </button>
-          <button className={s.btnSecondary} onClick={load} disabled={loading}>
-            <IconRefresh size={14} /> {loading ? 'Actualizando…' : 'Actualizar'}
+          <button className={s.btnSecondary} onClick={() => setEdgeOpen(true)} disabled={busy}>
+            <IconCloud size={14} /> Sincronizar con Edge
           </button>
           <button className={s.btnPrimary} onClick={() => setModalOpen(true)}>+ Nuevo KVM</button>
         </div>
@@ -102,6 +151,12 @@ function KeyValueMaps() {
       {error && (
         <div className={k.banner} data-tone="error">
           <IconWarning size={15} /> <span>{error}</span>
+        </div>
+      )}
+
+      {notice && !error && (
+        <div className={k.banner} data-tone="ok">
+          <IconCheck size={15} /> <span>{notice}</span>
         </div>
       )}
 
@@ -119,8 +174,8 @@ function KeyValueMaps() {
         <div className={k.banner} data-tone="warn">
           <IconWarning size={15} />
           <span>
-            {outOfSync} KVM sin cargar en el emulador. Pulsa <strong>Sincronizar</strong> para
-            que las políticas los vean.
+            {outOfSync} KVM sin cargar en el emulador. Pulsa <strong>Recargar en emulador</strong>{' '}
+            para que las políticas los vean.
           </span>
         </div>
       )}
@@ -137,17 +192,51 @@ function KeyValueMaps() {
             />
           </div>
           <div className={s.tableBarRight}>
-            <select
-              className={k.select}
-              value={scopeFilter}
-              onChange={e => setScopeFilter(e.target.value)}
-              aria-label="Filtrar por scope"
-            >
-              <option value="todos">Todos los scopes</option>
-              <option value="environment">Entorno</option>
-              <option value="organization">Organización</option>
-            </select>
-            <span className={s.countLabel}>{filtered.length} de {maps.length} KVMs</span>
+            {selecting ? (
+              <>
+                <span className={s.countLabel}>{selected.size} seleccionados</span>
+                <button
+                  className={s.btnDanger}
+                  disabled={selected.size === 0 || busy}
+                  onClick={() =>
+                    setPendingDelete({ mode: 'selected', names: [...selected] })
+                  }
+                >
+                  <IconTrash size={13} /> Eliminar ({selected.size})
+                </button>
+                <button
+                  className={s.btnDanger}
+                  disabled={maps.length === 0 || busy}
+                  onClick={() => setPendingDelete({ mode: 'all' })}
+                >
+                  <IconTrash size={13} /> Eliminar todos
+                </button>
+                <button className={s.btnSecondary} onClick={exitSelection}>
+                  <IconX size={13} /> Cancelar
+                </button>
+              </>
+            ) : (
+              <>
+                <select
+                  className={k.select}
+                  value={scopeFilter}
+                  onChange={e => setScopeFilter(e.target.value)}
+                  aria-label="Filtrar por scope"
+                >
+                  <option value="todos">Todos los scopes</option>
+                  <option value="environment">Entorno</option>
+                  <option value="organization">Organización</option>
+                </select>
+                <button
+                  className={s.btnSecondary}
+                  onClick={() => setSelecting(true)}
+                  disabled={maps.length === 0}
+                >
+                  Seleccionar
+                </button>
+                <span className={s.countLabel}>{filtered.length} de {maps.length} KVMs</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -155,6 +244,18 @@ function KeyValueMaps() {
           <table className={s.table}>
             <thead>
               <tr>
+                {selecting && (
+                  <th className={s.checkCell}>
+                    <input
+                      type="checkbox"
+                      className={s.checkbox}
+                      checked={allVisibleSelected}
+                      onChange={toggleAllVisible}
+                      disabled={visibleNames.length === 0}
+                      aria-label="Seleccionar todos los KVM visibles"
+                    />
+                  </th>
+                )}
                 <th>Nombre del KVM</th>
                 <th>Scope</th>
                 <th>Cifrado</th>
@@ -167,12 +268,26 @@ function KeyValueMaps() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className={s.empty}>
+                  <td colSpan={columnCount} className={s.empty}>
                     {loading ? 'Cargando…' : 'Sin resultados'}
                   </td>
                 </tr>
               ) : filtered.map(row => (
-                <tr key={`${row.scope}:${row.name}`}>
+                <tr
+                  key={`${row.scope}:${row.name}`}
+                  className={selecting && selected.has(row.name) ? s.rowSelected : ''}
+                >
+                  {selecting && (
+                    <td className={s.checkCell}>
+                      <input
+                        type="checkbox"
+                        className={s.checkbox}
+                        checked={selected.has(row.name)}
+                        onChange={() => toggleOne(row.name)}
+                        aria-label={`Seleccionar ${row.name}`}
+                      />
+                    </td>
+                  )}
                   <td>
                     <span className={s.nameCell}>
                       <IconKVM size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
@@ -212,7 +327,7 @@ function KeyValueMaps() {
                         className={`${s.iconAction} ${s.iconActionDanger}`}
                         title={`Eliminar ${row.name}`}
                         aria-label={`Eliminar ${row.name}`}
-                        onClick={() => setPendingDelete(row)}
+                        onClick={() => setPendingDelete({ mode: 'one', row })}
                       >
                         <IconTrash size={15} />
                       </button>
@@ -236,17 +351,42 @@ function KeyValueMaps() {
         }}
       />
 
+      <EdgeSyncModal
+        isOpen={edgeOpen}
+        environment={catalog.environment}
+        onClose={() => setEdgeOpen(false)}
+        onImported={() => load()}
+      />
+
       <ConfirmDialog
         isOpen={Boolean(pendingDelete)}
-        title="Eliminar Key Value Map"
+        title={pendingDelete?.mode === 'one' ? 'Eliminar Key Value Map' : 'Eliminar Key Value Maps'}
         confirmLabel={busy ? 'Eliminando…' : 'Eliminar'}
         busy={busy}
         onCancel={() => setPendingDelete(null)}
-        onConfirm={handleDelete}
+        onConfirm={confirmDelete}
       >
-        Se eliminará <strong>{pendingDelete?.name}</strong> del workspace
-        (<code>{pendingDelete?.source}</code>) y del runtime del emulador, con sus{' '}
-        {pendingDelete?.entryCount} entrada(s). Esta acción no se puede deshacer.
+        {pendingDelete?.mode === 'one' && (
+          <>
+            Se eliminará <strong>{pendingDelete.row.name}</strong> del workspace
+            (<code>{pendingDelete.row.source}</code>) y del runtime del emulador, con sus{' '}
+            {pendingDelete.row.entryCount} entrada(s). Esta acción no se puede deshacer.
+          </>
+        )}
+        {pendingDelete?.mode === 'selected' && (
+          <>
+            Se eliminarán <strong>{pendingDelete.names.length} KVM</strong> del workspace y del
+            runtime del emulador: {pendingDelete.names.join(', ')}. Esta acción no se puede
+            deshacer.
+          </>
+        )}
+        {pendingDelete?.mode === 'all' && (
+          <>
+            Se eliminarán <strong>los {maps.length} KVM</strong> de los dos scopes, tanto del
+            workspace como del runtime del emulador. Los archivos <code>kvms.json</code> quedarán
+            vacíos. Esta acción no se puede deshacer.
+          </>
+        )}
       </ConfirmDialog>
     </div>
   )

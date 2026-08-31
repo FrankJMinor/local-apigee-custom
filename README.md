@@ -232,6 +232,86 @@ defecto y la variable queda vacía:
 ```
 
 
+### Traer los KVM desde Apigee Edge
+
+El botón **Sincronizar con Edge** abre un modal que pide usuario, contraseña y
+ambiente, consulta la instalación real de Apigee Edge y deja sus KVM en el
+workspace y en el emulador. Así las políticas locales trabajan con los mismos
+valores que la instalación de verdad.
+
+**Ambientes configurados** (`APIGEE_EDGE_ENVIRONMENTS` en `core/settings.py`):
+
+| Clave | URL | Estado |
+| --- | --- | --- |
+| `dev` | `https://ms-apigee-dev.svamx.com/v1/o/americamovil/e/dev/keyvaluemaps` | Con permisos |
+| `pre-prod` | `https://ms-apigee.svamx.com/v1/o/americamovil/e/pre-prod/keyvaluemaps` | Sin permisos aún |
+| `prd` | `https://ms-apigee.svamx.com/v1/o/americamovil/e/prd/keyvaluemaps` | Sin permisos aún |
+
+Los tres están operativos en código; `enabled` solo marca cuáles tienen ya los
+permisos concedidos, para avisar en el desplegable antes de lanzar la consulta.
+`pre-prod` y `prd` devolverán 401 hasta que los habiliten, y el modal lo explica
+en lugar de soltar el error pelado.
+
+**Autenticación y credenciales**
+
+Basic auth contra la API clásica de Edge. Las credenciales se piden en cada
+sincronización, viven en el estado del modal mientras dura la llamada y se
+borran al cerrar. No se guardan en `localStorage`, ni en el backend, ni en el
+log: `APIs/edge.py` construye la cabecera y la deja ir con la petición. El log
+registra usuario y ambiente para poder rastrear la operación, nunca la
+contraseña.
+
+**Requisitos y errores esperados**
+
+Los hosts solo responden con la **VPN corporativa** levantada. El backend
+clasifica el fallo y lo devuelve en `kind`, y la UI añade qué hacer en cada caso:
+
+| `kind` | Cuándo | Respuesta |
+| --- | --- | --- |
+| `vpn` | El host no responde | 502 |
+| `auth` | Credenciales rechazadas o ambiente sin permisos | 401 |
+| `forbidden` | Autenticado pero sin lectura sobre los KVM | 403 |
+| `tls` | El certificado no se pudo verificar | 502 |
+| `notfound` | Organización o environment mal configurados | 502 |
+
+Un 401 sobre un KVM concreto no aborta la descarga completa: en Edge los
+permisos se conceden mapa a mapa, así que ese se omite y se sigue con el resto.
+
+**TLS**
+
+Los gateways presentan un certificado emitido por una CA interna (`Apigee CA`,
+de Radiomóvil Dipsa) que el contenedor no conoce. Hay dos opciones:
+
+* Montar esa CA en el contenedor y apuntar `APIGEE_EDGE_CA_BUNDLE` a su ruta.
+  Es lo correcto: la conexión se verifica de verdad.
+* Dejar `APIGEE_EDGE_VERIFY_TLS=false` (el valor por defecto). Funciona sin más
+  configuración, pero conviene tenerlo presente: por esa conexión viajan las
+  credenciales de Edge.
+
+**KVM cifrados**
+
+Edge nunca expone los valores de un KVM cifrado por la API: llegan como `*****`.
+Se importan igualmente —el nombre de las llaves sí es útil— pero el modal lista
+cuáles vinieron enmascarados para que no se confundan con valores reales.
+
+**Reemplazar o mezclar**
+
+Sin marcar *Reemplazar*, la importación es un *upsert*: crea los que faltan,
+actualiza los que coinciden por nombre y deja intactos los KVM locales que no
+existen en Edge. Marcándolo, el `kvms.json` queda solo con lo que vino de Edge.
+
+Los KVM cuyo nombre no cumple las reglas del emulador se omiten en vez de
+abortar la importación, y se listan en el resumen con el motivo.
+
+**Borrado en bloque**
+
+El botón **Seleccionar** de la tabla activa las casillas —fuera de ese modo no
+se muestran, para no marcarlas sin querer—. Con filas marcadas aparecen
+*Eliminar (n)* y *Eliminar todos*, que borran de los dos scopes con una sola
+recarga del emulador en vez de encadenar una por KVM. La vista de edición de un
+KVM tiene el mismo modo para sus llaves.
+
+
 ### Alta de proxies desde la UI (+ Nuevo Proxy)
 
 El botón **+ Nuevo Proxy** de la pantalla *API Proxies* replica el asistente

@@ -53,6 +53,9 @@ function KeyValueMapDetail() {
   const [reveal, setReveal] = useState(false)
 
   // ── Edición ──
+  // Las casillas solo aparecen al entrar en modo selección; con la tabla en uso
+  // normal estorban y se marcan sin querer.
+  const [selecting, setSelecting] = useState(false)
   const [selected, setSelected] = useState(() => new Set())
   const [editing, setEditing] = useState(null)     // { original, name, value }
   const [draft, setDraft] = useState(null)         // fila de alta
@@ -142,6 +145,11 @@ function KeyValueMapDetail() {
     return next
   })
 
+  const exitSelection = () => {
+    setSelecting(false)
+    setSelected(new Set())
+  }
+
   // ── Acciones ──
 
   const saveDraft = async () => {
@@ -183,7 +191,7 @@ function KeyValueMapDetail() {
         )
 
     if (ok) {
-      setSelected(new Set())
+      exitSelection()
       setPendingDelete(null)
     }
   }
@@ -231,7 +239,9 @@ function KeyValueMapDetail() {
     )
   }
 
-  const editingLocked = busy || Boolean(draft)
+  // Mientras se seleccionan filas, editar o borrar una suelta confunde: la
+  // acción visible en ese momento es la del bloque.
+  const editingLocked = busy || Boolean(draft) || selecting
 
   return (
     <div>
@@ -295,7 +305,7 @@ function KeyValueMapDetail() {
           <button
             className={s.btnPrimary}
             onClick={() => { setEditing(null); setDraft({ name: '', value: '' }) }}
-            disabled={busy || Boolean(draft)}
+            disabled={busy || Boolean(draft) || selecting}
           >
             <IconPlus size={14} /> Nueva llave
           </button>
@@ -380,19 +390,46 @@ function KeyValueMapDetail() {
           </div>
 
           <div className={s.toolbarRight}>
-            {kvm.encrypted && (
-              <button className={s.btnGhost} onClick={() => setReveal(r => !r)}>
-                {reveal ? 'Ocultar valores' : 'Mostrar valores'}
-              </button>
+            {selecting ? (
+              <>
+                <span className={s.countLabel}>{selected.size} seleccionadas</span>
+                <button
+                  className={s.btnDanger}
+                  disabled={selected.size === 0 || busy}
+                  onClick={() => setPendingDelete([...selected])}
+                >
+                  <IconTrash size={13} /> Eliminar ({selected.size})
+                </button>
+                <button
+                  className={s.btnDanger}
+                  disabled={entries.length === 0 || busy}
+                  onClick={() => setPendingDelete(entries.map(e => e.name))}
+                >
+                  <IconTrash size={13} /> Eliminar todas
+                </button>
+                <button className={s.btnGhostSm} onClick={exitSelection}>
+                  <IconX size={13} /> Cancelar
+                </button>
+              </>
+            ) : (
+              <>
+                {kvm.encrypted && (
+                  <button className={s.btnGhost} onClick={() => setReveal(r => !r)}>
+                    {reveal ? 'Ocultar valores' : 'Mostrar valores'}
+                  </button>
+                )}
+                <button
+                  className={s.btnGhost}
+                  onClick={() => { setEditing(null); setDraft(null); setSelecting(true) }}
+                  disabled={entries.length === 0}
+                >
+                  Seleccionar
+                </button>
+                <span className={s.countLabel}>
+                  {filtered.length} de {entries.length} llaves
+                </span>
+              </>
             )}
-            {selected.size > 0 && (
-              <button className={s.btnDanger} onClick={() => setPendingDelete([...selected])}>
-                <IconTrash size={13} /> Eliminar ({selected.size})
-              </button>
-            )}
-            <span className={s.countLabel}>
-              {filtered.length} de {entries.length} llaves
-            </span>
           </div>
         </div>
 
@@ -400,16 +437,18 @@ function KeyValueMapDetail() {
           <table className={s.table}>
             <thead>
               <tr>
-                <th className={s.checkCell}>
-                  <input
-                    type="checkbox"
-                    className={s.checkbox}
-                    checked={allVisibleSelected}
-                    onChange={toggleAllVisible}
-                    disabled={visibleNames.length === 0}
-                    aria-label="Seleccionar las llaves visibles"
-                  />
-                </th>
+                {selecting && (
+                  <th className={s.checkCell}>
+                    <input
+                      type="checkbox"
+                      className={s.checkbox}
+                      checked={allVisibleSelected}
+                      onChange={toggleAllVisible}
+                      disabled={visibleNames.length === 0}
+                      aria-label="Seleccionar las llaves visibles"
+                    />
+                  </th>
+                )}
                 <th>
                   <button className={s.sortBtn} onClick={() => toggleSort('name')}>
                     Llave <SortMark active={sort.column === 'name'} dir={sort.dir} />
@@ -426,7 +465,7 @@ function KeyValueMapDetail() {
             <tbody>
               {draft && (
                 <tr className={s.draftRow}>
-                  <td className={s.checkCell} />
+                  {selecting && <td className={s.checkCell} />}
                   <td>
                     <input
                       className={s.cellInput}
@@ -468,7 +507,7 @@ function KeyValueMapDetail() {
 
               {visible.length === 0 && !draft ? (
                 <tr>
-                  <td colSpan={4} className={s.empty}>
+                  <td colSpan={selecting ? 4 : 3} className={s.empty}>
                     {entries.length === 0
                       ? 'Este KVM todavía no tiene llaves. Usa “Nueva llave” para agregar la primera.'
                       : 'Ninguna llave coincide con la búsqueda.'}
@@ -479,18 +518,20 @@ function KeyValueMapDetail() {
                 return (
                   <tr
                     key={entry.name}
-                    className={selected.has(entry.name) ? s.rowSelected : ''}
+                    className={selecting && selected.has(entry.name) ? s.rowSelected : ''}
                   >
-                    <td className={s.checkCell}>
-                      <input
-                        type="checkbox"
-                        className={s.checkbox}
-                        checked={selected.has(entry.name)}
-                        onChange={() => toggleOne(entry.name)}
-                        disabled={isEditing}
-                        aria-label={`Seleccionar ${entry.name}`}
-                      />
-                    </td>
+                    {selecting && (
+                      <td className={s.checkCell}>
+                        <input
+                          type="checkbox"
+                          className={s.checkbox}
+                          checked={selected.has(entry.name)}
+                          onChange={() => toggleOne(entry.name)}
+                          disabled={isEditing}
+                          aria-label={`Seleccionar ${entry.name}`}
+                        />
+                      </td>
+                    )}
                     <td>
                       {isEditing ? (
                         <input

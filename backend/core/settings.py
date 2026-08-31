@@ -165,6 +165,54 @@ APIGEE_TRACE_STREAM_MAX_SECONDS = int(
     os.environ.get("APIGEE_TRACE_STREAM_MAX_SECONDS", "660")
 )
 
+# ── Apigee Edge remoto ──────────────────────────────────────────────
+# Environments de Edge desde los que se pueden traer KVM al emulador local.
+# Solo son alcanzables con la VPN corporativa levantada.
+#
+# `enabled` marca los que ya tienen permisos concedidos: hoy solo `dev`. Los
+# otros dos quedan configurados y se pueden intentar, pero devuelven 401 hasta
+# que se den de alta los permisos, y la UI lo avisa antes de lanzar la consulta.
+APIGEE_EDGE_ENVIRONMENTS = {
+    "dev": {
+        "label": "Desarrollo (dev)",
+        "base_url": "https://ms-apigee-dev.svamx.com",
+        "organization": "americamovil",
+        "environment": "dev",
+        "enabled": True,
+    },
+    "pre-prod": {
+        "label": "Pre-producción (pre-prod)",
+        "base_url": "https://ms-apigee.svamx.com",
+        "organization": "americamovil",
+        "environment": "pre-prod",
+        "enabled": False,
+    },
+    "prd": {
+        "label": "Producción (prd)",
+        "base_url": "https://ms-apigee.svamx.com",
+        "organization": "americamovil",
+        "environment": "prd",
+        "enabled": False,
+    },
+}
+
+APIGEE_EDGE_TIMEOUT = int(os.environ.get("APIGEE_EDGE_TIMEOUT", "45"))
+
+# Los gateways de Edge presentan un certificado emitido por una CA interna
+# ("Apigee CA", de Radiomóvil Dipsa) que no está en el almacén del contenedor.
+#
+# Lo correcto es montar esa CA y apuntar aquí: entonces la conexión se verifica
+# de verdad. Mientras no esté, la verificación se desactiva —son hosts internos
+# a los que solo se llega por la VPN—, pero conviene tenerlo presente: por esta
+# conexión viajan las credenciales de Edge.
+APIGEE_EDGE_CA_BUNDLE = os.environ.get("APIGEE_EDGE_CA_BUNDLE", "").strip()
+APIGEE_EDGE_VERIFY_TLS = os.environ.get("APIGEE_EDGE_VERIFY_TLS", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+
 # Los bundles de proxy se suben completos en memoria (por defecto DRF corta en 2.5 MB).
 DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024

@@ -85,8 +85,27 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
 - `emulator.push_test_data()`, `emulator.get_test_maps()` y `emulator.clear_test_data()`.
 - Componentes `ConfirmDialog` (confirmación de acciones destructivas, reutilizable) y
   `NewKvmModal` (alta de KVM con sus entradas iniciales).
+- Sincronización de KVM contra la instalación real de Apigee Edge: el botón **Sincronizar
+  con Edge** abre un modal que pide usuario, contraseña y ambiente (`dev`, `pre-prod`, `prd`),
+  consulta `GET /v1/o/{org}/e/{env}/keyvaluemaps` con autenticación Basic y deja los KVM en el
+  workspace y en el emulador. Hoy solo `dev` tiene permisos concedidos; los otros dos quedan
+  configurados y el desplegable avisa de que devolverán 401.
+- `APIs/edge.py`: cliente de la API de administración de Edge. Las credenciales viajan solo en
+  la petición: no se guardan en el navegador, ni en el backend, ni en el log. Traduce el fallo
+  a un `kind` (`vpn`, `auth`, `forbidden`, `tls`, `notfound`) y la UI explica qué hacer con cada
+  uno; los hosts únicamente responden con la VPN corporativa levantada.
+- `POST /v1/keyvaluemaps/edge/import` y `GET /v1/keyvaluemaps/edge/environments`.
+- Modo selección en las dos tablas de KVM: las casillas solo aparecen al pulsar **Seleccionar**,
+  y con ellas los botones *Eliminar (n)* y *Eliminar todos*. Antes las casillas de las llaves
+  estaban siempre visibles y las de los KVM no existían.
+- `POST /v1/keyvaluemaps/delete`: borra varios KVM (o todos, de los dos scopes) con una sola
+  recarga del emulador en lugar de encadenar una por nombre.
 
 ### Cambiado
+- El botón de sincronización de la tabla de KVM se separa en dos: **Recargar en emulador**
+  (reenvía el workspace, lo que antes hacía *Sincronizar*) y **Sincronizar con Edge** (trae los
+  KVM de la instalación real). Recargar sigue haciendo falta tras reiniciar el contenedor,
+  porque los datos de prueba del emulador viven solo en memoria.
 - Los nombres de KVM y de llave se validan en el backend con la misma expresión que aplica
   el emulador (`KeyValueMapUtil.ENTITY_NAME_PATTERN`): mínimo dos caracteres y sin `/`. No
   es cosmético: `POST /v1/emulator/setup/tests` reemplaza todos los datos de prueba y, si un

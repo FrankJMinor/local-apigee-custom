@@ -27,10 +27,13 @@ from APIs.views import (
     ApigeeOrganizationSharedFlowsImportView,
     ApigeePolicyMenuView,
     ApigeeProxyDetailView,
+    EdgeEnvironmentsView,
     EmulatorDeployView,
     EmulatorStatusView,
+    KeyValueMapBulkDeleteView,
     KeyValueMapCatalogView,
     KeyValueMapDetailView,
+    KeyValueMapEdgeImportView,
     KeyValueMapEntryDetailView,
     KeyValueMapEntryListView,
     KeyValueMapListView,
@@ -107,6 +110,11 @@ urlpatterns = [
     path("v1/keyvaluemaps", KeyValueMapCatalogView.as_view()),
     # Reenvía el workspace al emulador (tras editar kvms.json a mano o reiniciar)
     path("v1/keyvaluemaps/sync", KeyValueMapSyncView.as_view()),
+    # Borrado en bloque con una sola recarga del emulador
+    path("v1/keyvaluemaps/delete", KeyValueMapBulkDeleteView.as_view()),
+    # Trae los KVM de la instalación real de Apigee Edge (requiere VPN)
+    path("v1/keyvaluemaps/edge/import", KeyValueMapEdgeImportView.as_view()),
+    path("v1/keyvaluemaps/edge/environments", EdgeEnvironmentsView.as_view()),
     # Réplica local de la API de Apigee. El scope va implícito en la ruta:
     # sin `environments/<env>` es de organización, con él es de entorno.
     path("v1/organizations/<str:org>/keyvaluemaps", KeyValueMapListView.as_view()),

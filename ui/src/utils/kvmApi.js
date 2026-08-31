@@ -72,6 +72,9 @@ async function request(url, options = {}) {
     const detail = payload?.detail ? ` ${payload.detail}` : ''
     const error = new Error((payload?.error || `Error HTTP ${res.status}`) + detail)
     error.status = res.status
+    // El import desde Edge clasifica el fallo (vpn, auth, forbidden, tls…) para
+    // que la UI pueda explicar qué hacer en vez de soltar el mensaje pelado.
+    error.kind = payload?.kind
     throw error
   }
 
@@ -159,5 +162,41 @@ export function syncKvms(environment) {
   return request('/v1/keyvaluemaps/sync', {
     method: 'POST',
     ...jsonBody({ environment }),
+  })
+}
+
+/**
+ * Elimina varios KVM (o todos) con una sola recarga del emulador.
+ *
+ * @param {object} options
+ * @param {string[]} [options.names] Nombres a eliminar.
+ * @param {boolean} [options.all]    Elimina todos los KVM de los dos scopes.
+ */
+export function deleteKvms({ names, all = false, environment } = {}) {
+  return request('/v1/keyvaluemaps/delete', {
+    method: 'POST',
+    ...jsonBody({ names, all, environment }),
+  })
+}
+
+/** Ambientes de Apigee Edge configurados, para el desplegable del modal. */
+export function fetchEdgeEnvironments() {
+  return request('/v1/keyvaluemaps/edge/environments')
+}
+
+/**
+ * Trae los KVM de un ambiente de Apigee Edge al workspace y al emulador.
+ *
+ * Las credenciales viajan solo en esta llamada: no se guardan en el navegador
+ * ni en el backend. Los hosts de Edge solo responden con la VPN levantada, y un
+ * ambiente sin permisos concedidos devuelve 401; el error que llega trae `kind`
+ * (`vpn`, `auth`, `forbidden`, `tls`…) para poder explicarlo en la UI.
+ *
+ * @param {object} credentials `{username, password, edgeEnvironment, replace}`
+ */
+export function importFromEdge({ username, password, edgeEnvironment, replace = false, environment }) {
+  return request('/v1/keyvaluemaps/edge/import', {
+    method: 'POST',
+    ...jsonBody({ username, password, edgeEnvironment, replace, environment }),
   })
 }

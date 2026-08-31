@@ -19,7 +19,7 @@ from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from . import bundles, emulator, kvms, trace
+from . import bundles, edge, emulator, kvms, trace
 from .services import (
     get_current_revision,
     get_latest_revision_path,
@@ -1555,3 +1555,170 @@ class KeyValueMapEntryDetailView(APIView):
             return _emulator_error(exc)
 
         return Response({"keyValueMap": updated, **result})
+
+
+class KeyValueMapBulkDeleteView(APIView):
+    """Borrado de varios KVM a la vez, con una sola recarga del emulador."""
+
+    @extend_schema(
+        summary="Elimina varios KVM (o todos) del workspace y del emulador",
+        description=(
+            "Encadenar el borrado individual dispararía un `setup/tests` por cada "
+            "KVM. Aquí se reescriben los `kvms.json` afectados de los dos scopes y "
+            "se sincroniza una sola vez. Si el emulador rechaza la carga, los "
+            "archivos vuelven a su estado anterior."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "names": {"type": "array", "items": {"type": "string"}},
+                    "all": {"type": "boolean", "default": False},
+                },
+            }
+        },
+        responses={200: dict, 400: dict, 502: dict},
+    )
+    def post(self, request):
+        payload = request.data if isinstance(request.data, dict) else {}
+        environment = payload.get("environment") or settings.APIGEE_ENVIRONMENT
+        names = payload.get("names")
+
+        try:
+            summary, result = kvms.delete_maps(
+                names=names if isinstance(names, list) else None,
+                delete_all=_as_bool(payload.get("all", False)),
+                environment=environment,
+            )
+        except kvms.KvmError as exc:
+            return _kvm_error(exc)
+        except emulator.EmulatorError as exc:
+            return _emulator_error(exc)
+
+        return Response({**summary, **result})
+
+
+class EdgeEnvironmentsView(APIView):
+    """Environments de Apigee Edge configurados para la importación."""
+
+    @extend_schema(
+        summary="Lista los ambientes de Apigee Edge disponibles",
+        description=(
+            "Alimenta el desplegable del modal de sincronización. `enabled` indica "
+            "los que ya tienen permisos concedidos; los demás se pueden intentar, "
+            "pero hoy devuelven 401."
+        ),
+        responses={200: dict},
+    )
+    def get(self, request):
+        return Response(
+            {
+                "environments": edge.environments(),
+                "localEnvironment": settings.APIGEE_ENVIRONMENT,
+                "verifyTls": settings.APIGEE_EDGE_VERIFY_TLS,
+            }
+        )
+
+
+class KeyValueMapEdgeImportView(APIView):
+    """Trae los KVM de un environment de Apigee Edge al emulador local."""
+
+    @extend_schema(
+        summary="Importa los KVM de Apigee Edge al workspace y al emulador",
+        description=(
+            "Consulta `GET /v1/o/{org}/e/{env}/keyvaluemaps` en la instalación real "
+            "de Edge con autenticación Basic, descarga cada KVM y lo deja en el "
+            "`kvms.json` del workspace, sincronizando el emulador al final.\n\n"
+            "Las credenciales viajan solo en esta petición: no se guardan en disco "
+            "ni se escriben en el log. Los hosts de Edge únicamente responden con "
+            "la VPN corporativa levantada, y un ambiente sin permisos concedidos "
+            "devuelve 401.\n\n"
+            "Los KVM cifrados en Edge llegan con los valores enmascarados (`*****`): "
+            "se importan igualmente, pero se listan en `masked` para poder avisar."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "username": {"type": "string"},
+                    "password": {"type": "string"},
+                    "edgeEnvironment": {
+                        "type": "string",
+                        "description": "Clave del ambiente: dev, pre-prod o prd.",
+                    },
+                    "replace": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Deja solo lo importado y descarta el resto.",
+                    },
+                },
+                "required": ["username", "password", "edgeEnvironment"],
+            }
+        },
+        responses={200: dict, 400: dict, 401: dict, 502: dict},
+    )
+    def post(self, request):
+        payload = request.data if isinstance(request.data, dict) else {}
+        username = (payload.get("username") or "").strip()
+        password = payload.get("password") or ""
+        env_key = (payload.get("edgeEnvironment") or "").strip()
+
+        if not username or not password:
+            return Response(
+                {"error": "Hacen falta el usuario y la contraseña de Apigee Edge."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # El log lleva usuario y ambiente para poder rastrear la operación,
+        # nunca la contraseña.
+        logger.info(f"Importando KVM de Edge '{env_key}' como '{username}'")
+
+        try:
+            maps, masked = edge.fetch_all(env_key, username, password)
+        except edge.EdgeError as exc:
+            return Response(
+                {"error": exc.message, "kind": exc.kind},
+                status=_edge_status(exc),
+            )
+
+        if not maps:
+            return Response(
+                {
+                    "error": f"El ambiente '{env_key}' de Edge no devolvió ningún KVM.",
+                    "kind": "empty",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            summary, result = kvms.import_maps(
+                maps,
+                environment=payload.get("environment") or settings.APIGEE_ENVIRONMENT,
+                replace=_as_bool(payload.get("replace", False)),
+            )
+        except kvms.KvmError as exc:
+            return _kvm_error(exc)
+        except emulator.EmulatorError as exc:
+            return _emulator_error(exc)
+
+        return Response(
+            {
+                "edgeEnvironment": env_key,
+                "fetched": len(maps),
+                "masked": masked,
+                **summary,
+                **result,
+            }
+        )
+
+
+def _edge_status(exc):
+    """Traduce el fallo de Edge al código con el que responde este backend."""
+    if exc.kind == "auth":
+        return status.HTTP_401_UNAUTHORIZED
+    if exc.kind == "forbidden":
+        return status.HTTP_403_FORBIDDEN
+    if exc.kind == "config":
+        return status.HTTP_400_BAD_REQUEST
+    # VPN caída, TLS o error remoto: el fallo está aguas arriba, no en la petición.
+    return status.HTTP_502_BAD_GATEWAY
