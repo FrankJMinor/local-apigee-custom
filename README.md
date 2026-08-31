@@ -300,6 +300,24 @@ Sin marcar *Reemplazar*, la importación es un *upsert*: crea los que faltan,
 actualiza los que coinciden por nombre y deja intactos los KVM locales que no
 existen en Edge. Marcándolo, el `kvms.json` queda solo con lo que vino de Edge.
 
+**Barra de progreso**
+
+Edge no expone un endpoint que devuelva todos los KVM con sus entradas de una
+sola llamada: hay que listar los nombres y luego pedirlos uno a uno. Con ochenta
+mapas eso tarda, así que el backend admite `"stream": true` en el cuerpo y emite
+el avance como Server-Sent Events (`progress`, `phase`, `done`, `error`). La UI
+lo lee con `fetch` y un lector de stream —no con `EventSource`, que solo hace GET
+y aquí las credenciales van en el cuerpo— y pinta la barra.
+
+**Mayúsculas en los nombres**
+
+El cargador del emulador compara los nombres con un `Set<String>` de Java, así
+que distingue mayúsculas: `CreateUser` y `createuser` conviven como dos llaves.
+Edge tiene muchas llaves que solo difieren en la caja (`…__CreateUser` /
+`…__createUser`), de modo que la comprobación de unicidad también distingue
+mayúsculas. Un duplicado exacto durante la importación se resuelve quedándose con
+el último valor —lo mismo que haría el objeto JSON del `maps.json`— y se reporta.
+
 **Nombres que el emulador no admite**
 
 Comprobado contra el contenedor: el cargador rechaza los nombres de un solo

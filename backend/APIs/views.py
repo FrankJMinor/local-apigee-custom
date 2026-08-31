@@ -1672,6 +1672,12 @@ class KeyValueMapEdgeImportView(APIView):
         # nunca la contraseña.
         logger.info(f"Importando KVM de Edge '{env_key}' como '{username}'")
 
+        environment = payload.get("environment") or settings.APIGEE_ENVIRONMENT
+        replace = _as_bool(payload.get("replace", False))
+
+        if _as_bool(payload.get("stream", False)):
+            return self._stream(env_key, username, password, environment, replace)
+
         try:
             maps, masked = edge.fetch_all(env_key, username, password)
         except edge.EdgeError as exc:
@@ -1690,11 +1696,7 @@ class KeyValueMapEdgeImportView(APIView):
             )
 
         try:
-            summary, result = kvms.import_maps(
-                maps,
-                environment=payload.get("environment") or settings.APIGEE_ENVIRONMENT,
-                replace=_as_bool(payload.get("replace", False)),
-            )
+            summary, result = kvms.import_maps(maps, environment=environment, replace=replace)
         except kvms.KvmError as exc:
             return _kvm_error(exc)
         except emulator.EmulatorError as exc:
@@ -1709,6 +1711,67 @@ class KeyValueMapEdgeImportView(APIView):
                 **result,
             }
         )
+
+    def _stream(self, env_key, username, password, environment, replace):
+        """Misma importación, emitiendo el avance como Server-Sent Events.
+
+        Edge no expone los KVM con sus entradas de una sola llamada: hay que
+        pedirlos uno a uno, y con 80 mapas la espera es larga. Aquí se emite un
+        evento por cada uno para que la UI pueda pintar la barra de progreso.
+
+        Va por POST y no por `EventSource` porque las credenciales viajan en el
+        cuerpo; el navegador lo lee con `fetch` y un lector de stream.
+        """
+
+        def event_stream():
+            maps, masked = [], []
+
+            try:
+                for kind, data in edge.iter_all(env_key, username, password):
+                    if kind == "progress":
+                        yield _sse("progress", data)
+                    else:
+                        maps, masked = data
+            except edge.EdgeError as exc:
+                yield _sse("error", {"error": exc.message, "kind": exc.kind})
+                return
+
+            if not maps:
+                yield _sse(
+                    "error",
+                    {
+                        "error": f"El ambiente '{env_key}' de Edge no devolvió ningún KVM.",
+                        "kind": "empty",
+                    },
+                )
+                return
+
+            yield _sse("phase", {"phase": "write", "total": len(maps)})
+
+            try:
+                summary, result = kvms.import_maps(maps, environment=environment, replace=replace)
+            except (kvms.KvmError, emulator.EmulatorError) as exc:
+                message = getattr(exc, "message", str(exc))
+                yield _sse("error", {"error": message, "kind": "local"})
+                return
+
+            yield _sse(
+                "done",
+                {
+                    "edgeEnvironment": env_key,
+                    "fetched": len(maps),
+                    "masked": masked,
+                    **summary,
+                    **result,
+                },
+            )
+
+        response = StreamingHttpResponse(
+            event_stream(), content_type="text/event-stream; charset=utf-8"
+        )
+        response["Cache-Control"] = "no-cache"
+        response["X-Accel-Buffering"] = "no"
+        return response
 
 
 def _edge_status(exc):

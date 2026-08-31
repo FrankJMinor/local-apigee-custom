@@ -312,10 +312,8 @@ def list_maps(environment: Optional[str] = None) -> List[Dict[str, Any]]:
 
 def get_map(name: str, scope: str, environment: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Busca un KVM por nombre dentro de un scope (sin distinguir mayúsculas)."""
-    lowered = (name or "").lower()
-
     for item in load_scope(scope, environment):
-        if item["name"].lower() == lowered:
+        if item["name"] == name:
             return item
 
     return None
@@ -323,10 +321,8 @@ def get_map(name: str, scope: str, environment: Optional[str] = None) -> Optiona
 
 def find_map(name: str, environment: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Busca un KVM en cualquiera de los dos scopes."""
-    lowered = (name or "").lower()
-
     for item in list_maps(environment):
-        if item["name"].lower() == lowered:
+        if item["name"] == name:
             return item
 
     return None
@@ -533,7 +529,7 @@ def create_map(
     if find_map(clean, env):
         raise KvmError(f"Ya existe un KVM llamado '{clean}'.")
 
-    normalized = _validate_entries(entries or [])
+    normalized, _ = _validate_entries(entries or [])
     now = _now_millis()
     path = kvm_file(scope, env)
     previous = _load_for_write(path)
@@ -575,7 +571,7 @@ def update_map(
     target = updated[index]
     final_name = str(target.get("name", name))
 
-    if new_name is not None and new_name.strip().lower() != final_name.lower():
+    if new_name is not None and new_name.strip() != final_name:
         final_name = validate_name(new_name, "KVM")
         if find_map(final_name, env):
             raise KvmError(f"Ya existe un KVM llamado '{final_name}'.")
@@ -585,7 +581,7 @@ def update_map(
         target["encrypted"] = bool(encrypted)
 
     if entries is not None:
-        target["entry"] = _validate_entries(entries)
+        target["entry"], _ = _validate_entries(entries)
 
     target["lastModifiedAt"] = _now_millis()
     if not target.get("createdAt"):
@@ -636,13 +632,13 @@ def delete_maps(
         Tuple con el resumen (``deleted``, ``notFound``) y el resultado del sync.
     """
     env = environment or settings.APIGEE_ENVIRONMENT
-    wanted = {str(name).lower() for name in (names or [])}
+    wanted = {str(name) for name in (names or [])}
 
     if not delete_all and not wanted:
         raise KvmError("No se recibió ningún KVM que eliminar.")
 
     def marked(item: Dict[str, Any]) -> bool:
-        return delete_all or str(item.get("name", "")).lower() in wanted
+        return delete_all or str(item.get("name", "")) in wanted
 
     deleted: List[str] = []
     # Se respalda cada archivo tocado para poder revertir los dos si el sync falla.
@@ -677,7 +673,7 @@ def delete_maps(
             logger.error(f"No se pudo restaurar el estado previo del emulador: {restore_exc}")
         raise
 
-    not_found = sorted(wanted - {name.lower() for name in deleted})
+    not_found = sorted(wanted - set(deleted))
     logger.info(f"Eliminados {len(deleted)} KVM: {deleted}")
     return {"deleted": sorted(deleted), "notFound": not_found}, result
 
@@ -724,6 +720,7 @@ def import_maps(
     created: List[str] = []
     refreshed: List[str] = []
     skipped: List[Dict[str, str]] = []
+    collapsed: List[Dict[str, Any]] = []
 
     for raw in maps:
         name = str(raw.get("name", "")).strip()
@@ -733,10 +730,15 @@ def import_maps(
             continue
 
         try:
-            entries = _validate_entries(raw.get("entry", raw.get("entries")), strict=False)
+            entries, duplicated = _validate_entries(
+                raw.get("entry", raw.get("entries")), strict=False
+            )
         except KvmError as exc:
             skipped.append({"name": name, "reason": str(exc)})
             continue
+
+        if duplicated:
+            collapsed.append({"map": name, "keys": sorted(set(duplicated))})
 
         index = _index_of(updated, name)
         record = {
@@ -763,9 +765,14 @@ def import_maps(
     result = _save_and_sync(path, previous, updated, env)
     logger.info(
         f"Importados desde Edge: {len(created)} nuevos, {len(refreshed)} actualizados, "
-        f"{len(skipped)} omitidos"
+        f"{len(skipped)} omitidos, {len(collapsed)} con llaves duplicadas"
     )
-    return {"created": created, "updated": refreshed, "skipped": skipped}, result
+    return {
+        "created": created,
+        "updated": refreshed,
+        "skipped": skipped,
+        "collapsed": collapsed,
+    }, result
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -784,7 +791,7 @@ def add_entry(
     current = _require_map(map_name, scope, environment)
     clean = validate_name(entry_name, "llave")
 
-    if any(entry["name"].lower() == clean.lower() for entry in current["entries"]):
+    if any(entry["name"] == clean for entry in current["entries"]):
         raise KvmError(f"La llave '{clean}' ya existe en el KVM '{current['name']}'.")
 
     entries = current["entries"] + [{"name": clean, "value": "" if value is None else str(value)}]
@@ -801,16 +808,15 @@ def update_entry(
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Cambia el valor de una llave y, opcionalmente, su nombre."""
     current = _require_map(map_name, scope, environment)
-    lowered = (entry_name or "").lower()
     entries = [dict(entry) for entry in current["entries"]]
-    index = next((i for i, e in enumerate(entries) if e["name"].lower() == lowered), None)
+    index = next((i for i, e in enumerate(entries) if e["name"] == entry_name), None)
 
     if index is None:
         raise KvmError(f"La llave '{entry_name}' no existe en el KVM '{current['name']}'.")
 
-    if new_name is not None and new_name.strip().lower() != lowered:
+    if new_name is not None and new_name.strip() != entry_name:
         clean = validate_name(new_name, "llave")
-        if any(e["name"].lower() == clean.lower() for i, e in enumerate(entries) if i != index):
+        if any(e["name"] == clean for i, e in enumerate(entries) if i != index):
             raise KvmError(f"La llave '{clean}' ya existe en el KVM '{current['name']}'.")
         entries[index]["name"] = clean
 
@@ -825,8 +831,7 @@ def delete_entry(
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Elimina una llave del KVM."""
     current = _require_map(map_name, scope, environment)
-    lowered = (entry_name or "").lower()
-    entries = [entry for entry in current["entries"] if entry["name"].lower() != lowered]
+    entries = [entry for entry in current["entries"] if entry["name"] != entry_name]
 
     if len(entries) == len(current["entries"]):
         raise KvmError(f"La llave '{entry_name}' no existe en el KVM '{current['name']}'.")
@@ -840,10 +845,7 @@ def delete_entry(
 
 
 def _index_of(maps: List[Dict[str, Any]], name: str) -> Optional[int]:
-    lowered = (name or "").lower()
-    return next(
-        (i for i, item in enumerate(maps) if str(item.get("name", "")).lower() == lowered), None
-    )
+    return next((i for i, item in enumerate(maps) if str(item.get("name", "")) == name), None)
 
 
 def _require_map(map_name: str, scope: str, environment: Optional[str]) -> Dict[str, Any]:
@@ -855,18 +857,32 @@ def _require_map(map_name: str, scope: str, environment: Optional[str]) -> Dict[
     return current
 
 
-def _validate_entries(entries: Any, strict: bool = True) -> List[Dict[str, str]]:
+def _validate_entries(entries: Any, strict: bool = True) -> Tuple[List[Dict[str, str]], List[str]]:
     """Valida la lista completa de entradas antes de tocar el disco.
+
+    La unicidad se comprueba distinguiendo mayúsculas, igual que el emulador:
+    su cargador usa un ``Set<String>`` de Java, y está comprobado contra el
+    contenedor que ``CreateUser`` y ``createuser`` conviven como dos llaves.
+    Edge tiene muchas llaves que solo difieren en la caja
+    (``…__CreateUser`` / ``…__createUser``) y compararlas en minúsculas las
+    colapsaba.
 
     Args:
         entries: Entradas en cualquiera de las dos formas admitidas.
         strict: Con ``True`` (lo que teclea una persona) aplica las reglas de
-            nombres del emulador. Con ``False`` (importación desde Edge) solo
-            exige que la llave tenga nombre y no se repita: el workspace guarda
-            la copia fiel y el filtro se aplica al empujar al runtime.
+            nombres del emulador y rechaza el duplicado. Con ``False``
+            (importación desde Edge) solo exige que la llave tenga nombre, y un
+            duplicado exacto se resuelve quedándose con el último valor, que es
+            lo que haría el objeto JSON del ``maps.json``.
+
+    Returns:
+        Tuple con las entradas normalizadas y los nombres duplicados que se
+        colapsaron (vacío en modo estricto, que aborta en cuanto ve uno).
     """
     normalized = _normalize_entries(entries)
-    seen = set()
+    seen: Dict[str, int] = {}
+    result: List[Dict[str, str]] = []
+    duplicated: List[str] = []
 
     for entry in normalized:
         if strict:
@@ -876,10 +892,17 @@ def _validate_entries(entries: Any, strict: bool = True) -> List[Dict[str, str]]
             if not clean:
                 raise KvmError("El KVM trae una llave sin nombre.")
 
-        if clean.lower() in seen:
-            raise KvmError(f"La llave '{clean}' está repetida dentro del KVM.")
-
-        seen.add(clean.lower())
         entry["name"] = clean
 
-    return normalized
+        if clean in seen:
+            if strict:
+                raise KvmError(f"La llave '{clean}' está repetida dentro del KVM.")
+            # Gana el último, como haría el objeto JSON que consume el emulador.
+            result[seen[clean]] = entry
+            duplicated.append(clean)
+            continue
+
+        seen[clean] = len(result)
+        result.append(entry)
+
+    return result, duplicated

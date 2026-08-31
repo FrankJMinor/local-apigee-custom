@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { IconX, IconWarning, IconCheck, IconCloud } from './Icons'
-import { fetchEdgeEnvironments, importFromEdge } from '../utils/kvmApi'
+import { fetchEdgeEnvironments, importFromEdgeStreaming } from '../utils/kvmApi'
 import s from './EdgeSyncModal.module.css'
 
 // Qué hacer ante cada tipo de fallo que clasifica el backend.
@@ -28,6 +28,7 @@ export function EdgeSyncModal({ isOpen, environment, onClose, onImported }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [result, setResult] = useState(null)
+  const [progress, setProgress] = useState(null)
 
   // Cada apertura empieza limpia: sobre todo la contraseña, que no debe
   // sobrevivir a un cierre del modal.
@@ -42,6 +43,7 @@ export function EdgeSyncModal({ isOpen, environment, onClose, onImported }) {
     setReplace(false)
     setError(null)
     setResult(null)
+    setProgress(null)
     setBusy(false)
 
     fetchEdgeEnvironments()
@@ -62,15 +64,14 @@ export function EdgeSyncModal({ isOpen, environment, onClose, onImported }) {
     setBusy(true)
     setError(null)
     setResult(null)
+    setProgress({ done: 0, total: 0, current: 'Listando los KVM del ambiente…' })
 
     try {
-      const data = await importFromEdge({
-        username: username.trim(),
-        password,
-        edgeEnvironment,
-        replace,
-        environment,
-      })
+      const data = await importFromEdgeStreaming(
+        { username: username.trim(), password, edgeEnvironment, replace, environment },
+        p => setProgress({ ...p, phase: 'fetch' }),
+        p => setProgress({ done: p.total, total: p.total, phase: 'write' })
+      )
       // La contraseña deja de hacer falta en cuanto responde el backend.
       setPassword('')
       setResult(data)
@@ -79,8 +80,11 @@ export function EdgeSyncModal({ isOpen, environment, onClose, onImported }) {
       setError({ message: err.message, kind: err.kind })
     } finally {
       setBusy(false)
+      setProgress(null)
     }
   }
+
+  const percent = progress?.total ? Math.round((progress.done / progress.total) * 100) : 0
 
   return (
     <div className={s.overlay} onClick={busy ? undefined : onClose}>
@@ -104,6 +108,30 @@ export function EdgeSyncModal({ isOpen, environment, onClose, onImported }) {
         </div>
 
         <div className={s.body}>
+          {progress && (
+            <div className={s.progress}>
+              <div className={s.progressHead}>
+                <span>
+                  {progress.phase === 'write'
+                    ? 'Guardando en el workspace y cargando en el emulador…'
+                    : progress.total
+                      ? `Descargando KVM ${progress.done} de ${progress.total}`
+                      : progress.current}
+                </span>
+                {progress.total > 0 && <span className={s.progressPct}>{percent}%</span>}
+              </div>
+              <div className={s.progressTrack}>
+                <div
+                  className={`${s.progressBar} ${progress.total ? '' : s.progressIndeterminate}`}
+                  style={progress.total ? { width: `${percent}%` } : undefined}
+                />
+              </div>
+              {progress.phase === 'fetch' && progress.total > 0 && (
+                <div className={s.progressCurrent}>{progress.current}</div>
+              )}
+            </div>
+          )}
+
           {error && (
             <div className={s.error}>
               <IconWarning size={15} />
@@ -126,6 +154,12 @@ export function EdgeSyncModal({ isOpen, environment, onClose, onImported }) {
                   <div className={s.hintLine}>
                     {result.masked.length} venían cifrados y Edge no expone sus valores; se
                     importaron enmascarados: {result.masked.join(', ')}.
+                  </div>
+                )}
+                {result.collapsed?.length > 0 && (
+                  <div className={s.hintLine}>
+                    {result.collapsed.length} KVM traían llaves repetidas en Edge; se conservó el
+                    último valor de cada una: {result.collapsed.map(m => m.map).join(', ')}.
                   </div>
                 )}
                 {result.notLoadable?.length > 0 && (

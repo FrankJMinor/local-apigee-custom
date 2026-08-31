@@ -111,8 +111,17 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
   desincronizado.
 - `GET /v1/keyvaluemaps` añade `notLoadableKeys` y `loadable` por KVM, y los totales
   `notLoadableKeyCount` y `notLoadableMaps`.
+- Barra de progreso durante la importación desde Edge. El backend admite `"stream": true` y
+  emite el avance como Server-Sent Events; la UI lo lee con `fetch` y un lector de stream, ya
+  que las credenciales viajan en el cuerpo del POST y `EventSource` solo hace GET.
 
 ### Cambiado
+- La unicidad de nombres de KVM y de llave pasa a distinguir mayúsculas, como hace el emulador
+  (su cargador usa un `Set<String>` de Java: está comprobado que `CreateUser` y `createuser`
+  conviven). Compararlos en minúsculas colapsaba llaves legítimas de Edge que solo difieren en
+  la caja, y hacía fallar la importación de once KVM —`api-proxy-settings`,
+  `routing-repository`, `interface-repository` y compañía—. Un duplicado exacto durante la
+  importación ya no aborta el KVM: se conserva el último valor y se reporta.
 - El botón de sincronización de la tabla de KVM se separa en dos: **Recargar en emulador**
   (reenvía el workspace, lo que antes hacía *Sincronizar*) y **Sincronizar con Edge** (trae los
   KVM de la instalación real). Recargar sigue haciendo falta tras reiniciar el contenedor,

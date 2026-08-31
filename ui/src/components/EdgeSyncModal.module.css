@@ -101,6 +101,59 @@
   font-size: 0.94em;
 }
 
+/* ── Progreso de la descarga ── */
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  padding: 0.85em 1em;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-th);
+}
+.progressHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1em;
+  font-size: 0.85em;
+  color: var(--text-secondary);
+}
+.progressPct {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.progressTrack {
+  height: 7px;
+  border-radius: 20px;
+  background: var(--border);
+  overflow: hidden;
+}
+.progressBar {
+  height: 100%;
+  border-radius: 20px;
+  background: var(--accent);
+  transition: width 0.2s ease-out;
+}
+/* Mientras no se sabe el total (aún se está listando), la barra se pasea. */
+.progressIndeterminate {
+  width: 35%;
+  animation: sweep 1.1s ease-in-out infinite;
+}
+@keyframes sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+.progressCurrent {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.76em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ── Campos ── */
 .grid {
   display: grid;

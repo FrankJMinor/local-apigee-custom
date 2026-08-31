@@ -29,7 +29,7 @@ import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from django.conf import settings
 
@@ -284,25 +284,34 @@ def is_masked(kvm: Dict[str, Any]) -> bool:
     )
 
 
-def fetch_all(env_key: str, username: str, password: str) -> Tuple[List[Dict[str, Any]], List[str]]:
-    """Descarga todos los KVM del environment de Edge.
+def iter_all(env_key: str, username: str, password: str) -> Iterator[Tuple[str, Any]]:
+    """Descarga los KVM del environment cediendo el avance según van llegando.
 
-    Devuelve la lista en formato de workspace y los nombres de los que llegaron
-    enmascarados (cifrados en Edge), para poder avisar en la UI.
+    Edge no expone un endpoint que devuelva todos los KVM con sus entradas de
+    una sola llamada: hay que listar los nombres y luego pedirlos uno a uno. Con
+    ochenta mapas eso tarda, así que en vez de bloquear hasta el final esto va
+    emitiendo el progreso y la UI puede pintar una barra.
 
-    Un KVM que falla al leerse no aborta la descarga completa: se registra y se
-    sigue, porque los permisos en Edge se conceden mapa a mapa.
+    Yields:
+        ``("progress", {"done", "total", "current"})`` por cada KVM pedido y, al
+        terminar, ``("result", (maps, masked))``.
+
+    Un KVM que falla al leerse no aborta la descarga: se registra y se sigue,
+    porque en Edge los permisos se conceden mapa a mapa.
     """
     config = get_environment(env_key)
     authorization = _basic_auth(username, password)
     names = _extract_names(_request(_keyvaluemaps_url(config), authorization))
+    total = len(names)
 
-    logger.info(f"Edge '{env_key}': {len(names)} KVM listados")
+    logger.info(f"Edge '{env_key}': {total} KVM listados")
 
     maps: List[Dict[str, Any]] = []
     masked: List[str] = []
 
-    for name in names:
+    for done, name in enumerate(names, start=1):
+        yield "progress", {"done": done, "total": total, "current": name}
+
         try:
             payload = _request(_keyvaluemaps_url(config, name), authorization)
         except EdgeError as exc:
@@ -323,4 +332,20 @@ def fetch_all(env_key: str, username: str, password: str) -> Tuple[List[Dict[str
         maps.append(kvm)
 
     logger.info(f"Edge '{env_key}': {len(maps)} KVM descargados, {len(masked)} enmascarados")
-    return maps, masked
+    yield "result", (maps, masked)
+
+
+def fetch_all(env_key: str, username: str, password: str) -> Tuple[List[Dict[str, Any]], List[str]]:
+    """Descarga todos los KVM del environment de Edge, sin reportar avance.
+
+    Envoltorio síncrono de :func:`iter_all` para quien no necesita el progreso.
+
+    Returns:
+        Tuple con la lista en formato de workspace y los nombres de los que
+        llegaron enmascarados (cifrados en Edge), para poder avisar en la UI.
+    """
+    for kind, data in iter_all(env_key, username, password):
+        if kind == "result":
+            return data
+
+    return [], []

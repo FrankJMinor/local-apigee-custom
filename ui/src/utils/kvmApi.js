@@ -200,3 +200,82 @@ export function importFromEdge({ username, password, edgeEnvironment, replace = 
     ...jsonBody({ username, password, edgeEnvironment, replace, environment }),
   })
 }
+
+/**
+ * Igual que `importFromEdge`, pero informando del avance mientras descarga.
+ *
+ * Edge obliga a pedir los KVM uno a uno, así que con ochenta mapas la espera es
+ * larga. El backend emite el progreso como Server-Sent Events; aquí se lee con
+ * `fetch` y un lector de stream, no con `EventSource`, porque las credenciales
+ * viajan en el cuerpo del POST y `EventSource` solo hace GET.
+ *
+ * @param {object} credentials Igual que en `importFromEdge`.
+ * @param {(p: {done: number, total: number, current: string}) => void} onProgress
+ * @param {(phase: {phase: string, total: number}) => void} [onPhase]
+ * @returns {Promise<object>} El resumen final de la importación.
+ */
+export async function importFromEdgeStreaming(credentials, onProgress, onPhase) {
+  const res = await fetch('/v1/keyvaluemaps/edge/import', {
+    method: 'POST',
+    ...jsonBody({ ...credentials, stream: true }),
+  })
+
+  if (!res.ok || !res.body) {
+    // Un fallo antes de abrir el stream sí llega como JSON normal.
+    let payload = null
+    try {
+      payload = await res.json()
+    } catch {
+      // Sin cuerpo: nos quedamos con el status.
+    }
+    const error = new Error(payload?.error || `Error HTTP ${res.status}`)
+    error.status = res.status
+    error.kind = payload?.kind
+    throw error
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let result = null
+  let failure = null
+
+  // Los eventos vienen separados por una línea en blanco, y un chunk puede
+  // cortar uno por la mitad: se acumula hasta tener el bloque completo.
+  const consume = block => {
+    const event = /^event:\s*(.+)$/m.exec(block)?.[1]?.trim()
+    const data = /^data:\s*(.+)$/m.exec(block)?.[1]
+
+    if (!event || !data) return
+
+    const parsed = JSON.parse(data)
+    if (event === 'progress') onProgress?.(parsed)
+    else if (event === 'phase') onPhase?.(parsed)
+    else if (event === 'done') result = parsed
+    else if (event === 'error') failure = parsed
+  }
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const blocks = buffer.split('\n\n')
+    buffer = blocks.pop() ?? ''
+    blocks.forEach(consume)
+  }
+
+  if (buffer.trim()) consume(buffer)
+
+  if (failure) {
+    const error = new Error(failure.error)
+    error.kind = failure.kind
+    throw error
+  }
+
+  if (!result) {
+    throw new Error('La importación terminó sin devolver un resultado.')
+  }
+
+  return result
+}
