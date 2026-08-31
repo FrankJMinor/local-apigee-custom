@@ -9,6 +9,10 @@ administración en su puerto 8080 (`management.http.port`) bajo el prefijo `/v1`
   contrato y lo activa. Responde ``{"revision": "<N>"}``.
 * ``GET  /v1/emulator/tree`` — devuelve los endpoints desplegados y su basepath.
 * ``GET  /v1/emulator/version`` — metadatos del emulador y environment activo.
+* ``POST /v1/emulator/setup/tests`` — carga los datos de prueba (KVM, productos,
+  developers) desde un ZIP. Ver :func:`push_test_data`.
+* ``GET  /v1/emulator/test/maps`` — KVM que el runtime tiene cargados.
+* ``DELETE /v1/emulator/clear/test`` — descarga todos los datos de prueba.
 
 Este módulo replica exactamente el flujo que utiliza la extensión Cloud Code de
 VS Code al pulsar "Deploy", de modo que la UI pueda desplegar sin depender del IDE.
@@ -171,3 +175,42 @@ def get_trace_transactions(session_id: str) -> Dict[str, Any]:
     """Devuelve las transacciones capturadas por una sesión de depuración."""
     result = _request(f"/v1/emulator/trace/transactions?sessionid={session_id}")
     return result if isinstance(result, dict) else {}
+
+
+def push_test_data(archive: bytes) -> None:
+    """Carga en el runtime los datos de prueba contenidos en un ZIP.
+
+    El emulador extrae el archivo en ``/opt/apigee/sdlc/testdata`` y ejecuta un
+    cargador por cada JSON reconocido (``maps.json``, ``products.json``,
+    ``developers.json``, ``developerapps.json``). Después borra los archivos, así
+    que el disco no conserva nada: el estado vive solo en el runtime.
+
+    Ojo con dos comportamientos del emulador:
+
+    * **Reemplaza** todos los datos de prueba anteriores, no los mezcla. El ZIP
+      tiene que llevar siempre el estado completo que se quiere dejar cargado.
+    * Si un cargador falla (por ejemplo, un nombre de llave inválido), el
+      emulador responde 400 y **el runtime se queda sin datos de prueba**. Por eso
+      conviene validar los nombres antes de llamar aquí (ver ``kvms.validate_name``).
+
+    Args:
+        archive: Contenido del ZIP con los JSON de datos de prueba.
+    """
+    logger.info(f"Cargando datos de prueba en el emulador ({len(archive)} bytes)")
+    _request("/v1/emulator/setup/tests", method="POST", body=archive)
+
+
+def get_test_maps() -> List[Dict[str, Any]]:
+    """Devuelve los KVM cargados en el runtime.
+
+    El emulador responde 204 cuando no hay ninguno, y los KVM llegan con la lista
+    de llaves en ``entriesList`` pero **sin los valores**: para leer un valor hay
+    que hacerlo desde una política dentro de un proxy.
+    """
+    result = _request("/v1/emulator/test/maps")
+    return result if isinstance(result, list) else []
+
+
+def clear_test_data() -> None:
+    """Descarga del runtime todos los datos de prueba (KVM incluidos)."""
+    _request("/v1/emulator/clear/test", method="DELETE")

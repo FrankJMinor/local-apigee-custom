@@ -101,6 +101,137 @@ Para simular KVMs de la nube, se debe crear el archivo `./environments/apigee-de
 ]
 ```
 
+### Administrar KVMs desde la UI
+
+La pantalla *Key Value Maps* del menú **ADMIN** consulta los KVM del contenedor y
+permite crearlos, editarlos y borrarlos sin tocar los archivos a mano.
+
+**Cómo llegan los KVM al emulador**
+
+Los KVM no viajan dentro del contrato. `ApigeeSource`, el compilador que corre en
+`POST /v1/emulator/deploy`, solo lee `targetservers.json`, `flowhooks.json`,
+`debugmask.json`, `keystores.json`, `featureflags.json`, `datacollectors.json` y
+`deployments.json`; `kvms.json` no aparece por ningún lado. El emulador los carga
+por otra puerta, la de los datos de prueba, que es la que usa Cloud Code:
+
+| Endpoint | Qué hace |
+| --- | --- |
+| `POST /v1/emulator/setup/tests` | Recibe un ZIP con `maps.json` (y opcionalmente `products.json`, `developers.json`, `developerapps.json`), lo extrae en `/opt/apigee/sdlc/testdata`, lo carga en el runtime y borra los archivos. |
+| `GET /v1/emulator/test/maps` | Devuelve los KVM cargados, con los nombres de sus llaves pero **sin** los valores. |
+| `DELETE /v1/emulator/clear/test` | Descarga todos los datos de prueba. |
+
+`maps.json` tiene el formato que consume `TestKeyValueMapDefinition`, distinto del
+`kvms.json` del workspace:
+
+```json
+[
+  { "name": "MiKvmDePrueba", "scope": "environment", "entries": { "token_secreto": "12345" } }
+]
+```
+
+Dos comportamientos del emulador condicionan el diseño del backend:
+
+- `setup/tests` **reemplaza** todos los datos de prueba anteriores, no los mezcla.
+  Cada envío lleva el estado completo del workspace.
+- Si un cargador falla, el emulador responde 400 y el runtime se queda **sin
+  ningún** KVM. Por eso `APIs/kvms.py` valida los nombres antes de enviar, con la
+  misma expresión que aplica el emulador
+  (`KeyValueMapUtil.ENTITY_NAME_PATTERN`, `\b[A-Z0-9._\-$ ][^/]+$` sin distinguir
+  mayúsculas): mínimo dos caracteres y sin `/`. Si aun así falla, el backend
+  revierte el archivo y vuelve a sincronizar el estado anterior.
+
+**Dónde vive cada KVM**
+
+Como el runtime no devuelve los valores, la fuente de verdad es el workspace —lo
+que versiona Git y lo que ve VS Code—:
+
+| Scope | Archivo |
+| --- | --- |
+| `environment` | `src/main/apigee/environments/<env>/kvms.json` |
+| `organization` | `src/main/apigee/organization/kvms.json` |
+
+Son los dos únicos scopes que distingue el emulador: `KeyValueMapLoader` manda a
+`createEnvironmentScope` cuando `scope` es `environment` y a `createOrgScope` en
+cualquier otro caso.
+
+Los KVM creados desde la UI llevan además `createdAt` y `lastModifiedAt` en
+milisegundos, al estilo de las demás entidades de Apigee. Es lo que alimenta la
+columna *Fecha de Modificación*; para un `kvms.json` escrito a mano se usa la
+fecha del archivo.
+
+**La tabla**
+
+Cada fila sale del `kvms.json` correspondiente, cruzada con `GET
+/v1/emulator/test/maps`:
+
+| Columna | De dónde sale |
+| --- | --- |
+| Scope | La carpeta donde vive el archivo. |
+| Cifrado | `encrypted` del propio KVM. |
+| Entradas | Número de elementos de `entry`. |
+| En el emulador | Comparación entre las llaves del workspace y las que reporta el runtime. |
+| Fecha de Modificación | `lastModifiedAt`, o la fecha del archivo si no lo trae. |
+
+El botón **Sincronizar** vuelve a empujar el workspace al emulador. Hace falta
+cuando alguien edita `kvms.json` a mano o cuando el contenedor se reinicia: los
+datos de prueba viven solo en memoria, así que un reinicio los pierde y la
+columna *En el emulador* pasa a `Sin cargar`.
+
+**La vista de edición**
+
+Al pulsar el nombre de un KVM se abre una tabla estilo cliente de base de datos
+sobre sus llaves: búsqueda por llave, por valor o por ambas; filtro por filas con
+valor o vacías; orden ascendente/descendente por cualquiera de las dos columnas;
+paginado configurable; edición en línea (Enter guarda, Esc cancela); alta de
+llaves; borrado individual o por selección múltiple; y copia del valor al
+portapapeles. En un KVM cifrado los valores se muestran enmascarados con un botón
+*Mostrar valores*, igual que hace la consola de Apigee.
+
+El borrado múltiple se resuelve con una sola escritura y una sola sincronización,
+en vez de encadenar una llamada por llave.
+
+**Endpoints**
+
+Las rutas replican las de la API de administración de Apigee; el scope va
+implícito en la URL (sin `environments/<env>` es de organización, con él es de
+entorno):
+
+```
+GET    /v1/keyvaluemaps                                    catálogo de los dos scopes + estado del runtime
+POST   /v1/keyvaluemaps/sync                               reenvía el workspace al emulador
+
+GET    /v1/organizations/{org}/keyvaluemaps                       lista
+POST   /v1/organizations/{org}/keyvaluemaps                       crea
+GET    /v1/organizations/{org}/keyvaluemaps/{map}                 detalle con entradas
+PUT    /v1/organizations/{org}/keyvaluemaps/{map}                 renombra / cifra / reemplaza entradas
+DELETE /v1/organizations/{org}/keyvaluemaps/{map}                 elimina
+GET    /v1/organizations/{org}/keyvaluemaps/{map}/entries         llaves
+POST   /v1/organizations/{org}/keyvaluemaps/{map}/entries         agrega llave
+GET    /v1/organizations/{org}/keyvaluemaps/{map}/entries/{key}   llave
+PUT    /v1/organizations/{org}/keyvaluemaps/{map}/entries/{key}   edita llave
+DELETE /v1/organizations/{org}/keyvaluemaps/{map}/entries/{key}   elimina llave
+```
+
+Las mismas ocho rutas de `keyvaluemaps` existen bajo
+`/v1/organizations/{org}/environments/{env}/…` para el scope de entorno.
+
+**Leer un KVM desde un proxy**
+
+`GET /v1/emulator/test/maps` nunca devuelve valores: para comprobar un valor hay
+que leerlo desde una política. La política `KeyValueMapOperations` necesita el
+atributo `mapIdentifier` con el nombre del KVM; sin él consulta el mapa por
+defecto y la variable queda vacía:
+
+```xml
+<KeyValueMapOperations name="GetKVM" mapIdentifier="MiKvmDePrueba">
+    <Get assignTo="variable_guardada">
+        <Key><Parameter>token_secreto</Parameter></Key>
+    </Get>
+    <Scope>environment</Scope>
+</KeyValueMapOperations>
+```
+
+
 ### Alta de proxies desde la UI (+ Nuevo Proxy)
 
 El botón **+ Nuevo Proxy** de la pantalla *API Proxies* replica el asistente

@@ -1,0 +1,640 @@
+"""Administración de Key Value Maps del emulador local de Apigee.
+
+El emulador no compila los KVM dentro del contrato: `ApigeeSource` solo lee
+``targetservers.json``, ``flowhooks.json``, ``debugmask.json``,
+``keystores.json``, ``featureflags.json``, ``datacollectors.json`` y
+``deployments.json``. Los KVM entran por otra puerta, la misma que usa Cloud
+Code:
+
+* ``POST /v1/emulator/setup/tests`` — recibe un ZIP con ``maps.json`` (y, si se
+  usaran, ``products.json``, ``developers.json``, ``developerapps.json``). El
+  emulador lo extrae en ``/opt/apigee/sdlc/testdata``, lo carga en su store y
+  borra los archivos. **Reemplaza todo el test data anterior**, así que cada
+  envío tiene que llevar el estado completo.
+* ``GET /v1/emulator/test/maps`` — devuelve los KVM cargados en el runtime, con
+  los nombres de sus llaves pero *sin* los valores.
+
+Como el runtime no devuelve valores, la fuente de verdad son los archivos del
+workspace (lo que versiona Git y lo que ve VS Code):
+
+* ``src/main/apigee/environments/<env>/kvms.json`` — scope ``environment``.
+* ``src/main/apigee/organization/kvms.json``        — scope ``organization``.
+
+El emulador solo distingue esos dos scopes: ``KeyValueMapLoader`` manda a
+``createEnvironmentScope`` cuando ``scope`` es ``environment`` y a
+``createOrgScope`` en cualquier otro caso.
+
+Formato de cada archivo (el de Cloud Code, más metadatos de fechas al estilo
+Apigee, que otras herramientas ignoran si leen el archivo)::
+
+    [
+      {
+        "name": "MiKvm",
+        "encrypted": false,
+        "entry": [{"name": "llave", "value": "valor"}],
+        "createdAt": 1756500000000,
+        "lastModifiedAt": 1756500000000
+      }
+    ]
+"""
+
+import io
+import json
+import logging
+import os
+import re
+import tempfile
+import time
+import zipfile
+from typing import Any, Dict, List, Optional, Tuple
+
+from django.conf import settings
+
+from . import emulator
+
+logger = logging.getLogger(__name__)
+
+KVM_FILE = "kvms.json"
+
+SCOPE_ENVIRONMENT = "environment"
+SCOPE_ORGANIZATION = "organization"
+SCOPES = (SCOPE_ORGANIZATION, SCOPE_ENVIRONMENT)
+
+# Misma expresión que aplica el emulador en KeyValueMapUtil.ENTITY_NAME_PATTERN
+# (`\b[A-Z0-9._\-$ ][^/]+$` con CASE_INSENSITIVE y `matches()`): mínimo dos
+# caracteres, el primero alfanumérico o '. _ - $ espacio', y sin '/'.
+ENTITY_NAME_PATTERN = re.compile(r"\b[A-Z0-9._\-$ ][^/]+$", re.IGNORECASE)
+
+
+class KvmError(ValueError):
+    """La operación sobre el KVM no es válida o el nombre no cumple las reglas."""
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Rutas y lectura/escritura de los archivos del workspace
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def normalize_scope(scope: Optional[str]) -> str:
+    """Normaliza el scope recibido desde la UI a uno de los soportados."""
+    clean = (scope or SCOPE_ENVIRONMENT).strip().lower()
+
+    if clean in ("env", "environments"):
+        clean = SCOPE_ENVIRONMENT
+    elif clean in ("org", "organizations"):
+        clean = SCOPE_ORGANIZATION
+
+    if clean not in SCOPES:
+        raise KvmError(
+            f"Scope '{scope}' no soportado por el emulador. "
+            f"Usa '{SCOPE_ORGANIZATION}' o '{SCOPE_ENVIRONMENT}'."
+        )
+
+    return clean
+
+
+def kvm_file(scope: str, environment: Optional[str] = None) -> str:
+    """Ruta al ``kvms.json`` que guarda los KVM de ese scope."""
+    scope = normalize_scope(scope)
+    apigee_root = os.path.join(settings.APIGEE_SOURCE_ROOT, "main", "apigee")
+
+    if scope == SCOPE_ORGANIZATION:
+        return os.path.join(apigee_root, "organization", KVM_FILE)
+
+    env = environment or settings.APIGEE_ENVIRONMENT
+    return os.path.join(apigee_root, "environments", env, KVM_FILE)
+
+
+def validate_name(name: str, label: str = "KVM") -> str:
+    """Valida un nombre de KVM o de llave con las reglas del emulador.
+
+    Es preferible rechazar aquí que dejar que falle el emulador: un
+    ``setup/tests`` inválido deja el runtime **sin ningún** KVM cargado.
+    """
+    clean = (name or "").strip()
+
+    if not clean:
+        raise KvmError(f"El nombre del {label} es obligatorio.")
+
+    if not ENTITY_NAME_PATTERN.fullmatch(clean):
+        raise KvmError(
+            f"Nombre de {label} inválido: '{clean}'. "
+            "Debe tener al menos dos caracteres, empezar por una letra, un número "
+            "o uno de '. _ - $', y no puede contener '/'."
+        )
+
+    return clean
+
+
+def _read_file(path: str) -> List[Dict[str, Any]]:
+    """Lee un ``kvms.json`` tolerando que no exista o esté vacío."""
+    if not os.path.exists(path):
+        return []
+
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            content = handle.read().strip()
+    except OSError as exc:
+        raise KvmError(f"No se pudo leer '{path}': {exc}") from exc
+
+    if not content:
+        return []
+
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise KvmError(
+            f"El archivo '{path}' tiene JSON inválido y debe corregirse a mano: {exc}"
+        ) from exc
+
+    if not isinstance(data, list):
+        raise KvmError(f"El archivo '{path}' debe contener una lista de KVM.")
+
+    return [item for item in data if isinstance(item, dict)]
+
+
+def _write_file(path: str, maps: List[Dict[str, Any]]) -> None:
+    """Escribe el ``kvms.json`` con el mismo formato que deja Cloud Code.
+
+    La escritura es atómica —archivo temporal en la misma carpeta y ``os.replace``—
+    porque este archivo lo leen a la vez la UI, el empaquetado del workspace y
+    VS Code. Abrirlo en modo ``w`` lo trunca antes de escribirlo, y quien lo
+    leyera en ese instante vería un JSON a medias.
+    """
+    directory = os.path.dirname(path)
+    os.makedirs(directory, exist_ok=True)
+    temporary = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="\n",
+            dir=directory,
+            prefix=f".{KVM_FILE}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary = handle.name
+            json.dump(maps, handle, indent=2, ensure_ascii=False)
+            handle.write("\n")
+
+        os.replace(temporary, path)
+        temporary = None
+    except OSError as exc:
+        raise KvmError(f"No se pudo escribir en '{path}': {exc}") from exc
+    finally:
+        # Si algo falló antes del replace, el temporal no debe quedar en el workspace.
+        if temporary and os.path.exists(temporary):
+            os.remove(temporary)
+
+
+def _load_for_write(path: str) -> List[Dict[str, Any]]:
+    """Lee el archivo fijando la fecha de los KVM que aún no la tienen.
+
+    Los ``kvms.json` escritos a mano (o por Cloud Code) no traen ``createdAt`` ni
+    ``lastModifiedAt``, así que la lectura cae a la fecha del archivo. Como todos
+    los KVM de un scope comparten archivo, sin este sellado editar uno movería la
+    fecha de todos los demás en cada guardado.
+    """
+    maps = _read_file(path)
+    stamp = _file_millis(path) or _now_millis()
+
+    for item in maps:
+        item.setdefault("createdAt", stamp)
+        item.setdefault("lastModifiedAt", stamp)
+
+    return maps
+
+
+def _now_millis() -> int:
+    return int(time.time() * 1000)
+
+
+def _file_millis(path: str) -> Optional[int]:
+    """Fecha de modificación del archivo, para KVM sin metadatos propios."""
+    try:
+        return int(os.path.getmtime(path) * 1000)
+    except OSError:
+        return None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Normalización hacia la UI
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _normalize_entries(raw: Any) -> List[Dict[str, str]]:
+    """Acepta las dos formas de entradas y devuelve siempre ``[{name, value}]``.
+
+    El formato de Cloud Code usa ``entry: [{"name": ..., "value": ...}]``; el que
+    espera el emulador en ``maps.json`` es un objeto ``entries: {llave: valor}``.
+    Aquí se admiten ambos para no romper archivos escritos a mano.
+    """
+    entries: List[Dict[str, str]] = []
+
+    if isinstance(raw, dict):
+        return [{"name": str(k), "value": "" if v is None else str(v)} for k, v in raw.items()]
+
+    if isinstance(raw, list):
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name")
+            if name is None:
+                continue
+            value = item.get("value")
+            entries.append({"name": str(name), "value": "" if value is None else str(value)})
+
+    return entries
+
+
+def _to_api(raw: Dict[str, Any], scope: str, path: str, environment: str) -> Dict[str, Any]:
+    """Convierte un KVM del archivo en el objeto que consume la UI."""
+    entries = _normalize_entries(raw.get("entry", raw.get("entries")))
+    fallback = _file_millis(path)
+
+    return {
+        "name": str(raw.get("name", "")),
+        "scope": scope,
+        "environment": environment if scope == SCOPE_ENVIRONMENT else None,
+        "encrypted": bool(raw.get("encrypted", False)),
+        "entries": entries,
+        "entryCount": len(entries),
+        "createdAt": raw.get("createdAt") or fallback,
+        "lastModifiedAt": raw.get("lastModifiedAt") or fallback,
+        "source": os.path.relpath(path, settings.APIGEE_SOURCE_ROOT).replace(os.sep, "/"),
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Consulta
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def load_scope(scope: str, environment: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Devuelve los KVM de un scope, ya normalizados para la UI."""
+    scope = normalize_scope(scope)
+    env = environment or settings.APIGEE_ENVIRONMENT
+    path = kvm_file(scope, env)
+    return [_to_api(raw, scope, path, env) for raw in _read_file(path)]
+
+
+def list_maps(environment: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Catálogo completo del workspace: organización + environment."""
+    env = environment or settings.APIGEE_ENVIRONMENT
+    return load_scope(SCOPE_ORGANIZATION, env) + load_scope(SCOPE_ENVIRONMENT, env)
+
+
+def get_map(name: str, scope: str, environment: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Busca un KVM por nombre dentro de un scope (sin distinguir mayúsculas)."""
+    lowered = (name or "").lower()
+
+    for item in load_scope(scope, environment):
+        if item["name"].lower() == lowered:
+            return item
+
+    return None
+
+
+def find_map(name: str, environment: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Busca un KVM en cualquiera de los dos scopes."""
+    lowered = (name or "").lower()
+
+    for item in list_maps(environment):
+        if item["name"].lower() == lowered:
+            return item
+
+    return None
+
+
+def runtime_state(environment: Optional[str] = None) -> Dict[str, Any]:
+    """Lo que el contenedor del emulador tiene realmente cargado.
+
+    El runtime no devuelve los valores de las llaves, solo sus nombres, así que
+    sirve para confirmar qué está desplegado, no para leer secretos.
+    """
+    try:
+        loaded = emulator.get_test_maps()
+    except emulator.EmulatorError as exc:
+        logger.warning(f"No se pudo consultar los KVM del emulador: {exc}")
+        return {"available": False, "error": exc.message, "maps": {}}
+
+    maps = {}
+    for item in loaded:
+        if not isinstance(item, dict):
+            continue
+        entries = item.get("entriesList") or item.get("entry") or []
+        keys = [str(e.get("name")) for e in entries if isinstance(e, dict) and e.get("name")]
+        maps[str(item.get("name", ""))] = {"keys": keys, "keyCount": len(keys)}
+
+    return {"available": True, "maps": maps}
+
+
+def catalog(environment: Optional[str] = None) -> Dict[str, Any]:
+    """Catálogo del workspace cruzado con el estado del runtime.
+
+    Cada KVM lleva ``deployed`` e ``inSync`` para que la UI pueda distinguir uno
+    recién escrito de otro que el emulador ya tiene cargado.
+    """
+    env = environment or settings.APIGEE_ENVIRONMENT
+    workspace = list_maps(env)
+    runtime = runtime_state(env)
+    loaded = runtime.get("maps", {})
+
+    for item in workspace:
+        state = loaded.get(item["name"])
+        item["deployed"] = state is not None
+        item["runtimeKeyCount"] = state["keyCount"] if state else 0
+        item["inSync"] = bool(state) and sorted(state["keys"]) == sorted(
+            e["name"] for e in item["entries"]
+        )
+
+    return {
+        "environment": env,
+        "keyValueMaps": workspace,
+        "runtimeAvailable": runtime.get("available", False),
+        "runtimeError": runtime.get("error"),
+        # KVM que el emulador tiene cargados pero que ya no están en el workspace.
+        "orphanRuntimeMaps": sorted(set(loaded) - {item["name"] for item in workspace}),
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Sincronización con el emulador
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def build_testdata_archive(environment: Optional[str] = None) -> bytes:
+    """Empaqueta todos los KVM del workspace en el ``testdata.zip`` del emulador.
+
+    El emulador espera ``maps.json`` con la forma que consume
+    ``TestKeyValueMapDefinition``: ``[{name, scope, entries: {llave: valor}}]``.
+    """
+    definitions = []
+
+    for item in list_maps(environment):
+        entries = {}
+        for entry in item["entries"]:
+            validate_name(entry["name"], "llave")
+            entries[entry["name"]] = entry["value"]
+
+        validate_name(item["name"], "KVM")
+        definitions.append({"name": item["name"], "scope": item["scope"], "entries": entries})
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("maps.json", json.dumps(definitions, ensure_ascii=False, indent=2))
+
+    return buffer.getvalue()
+
+
+def sync(environment: Optional[str] = None) -> Dict[str, Any]:
+    """Empuja el workspace completo al runtime del emulador.
+
+    Returns:
+        Dict[str, Any]: ``{"synced": <nº de KVM>, "environment": <env>}``.
+
+    Raises:
+        KvmError: Si algún nombre no pasa la validación del emulador.
+        emulator.EmulatorError: Si el emulador rechaza la carga.
+    """
+    env = environment or settings.APIGEE_ENVIRONMENT
+    archive = build_testdata_archive(env)
+
+    emulator.push_test_data(archive)
+    count = len(list_maps(env))
+
+    logger.info(f"Sincronizados {count} KVM con el emulador ({len(archive)} bytes)")
+    return {"synced": count, "environment": env}
+
+
+def _save_and_sync(
+    path: str, previous: List[Dict[str, Any]], updated: List[Dict[str, Any]], environment: str
+) -> Dict[str, Any]:
+    """Escribe el archivo y sincroniza; si el emulador falla, revierte el archivo.
+
+    Un ``setup/tests`` rechazado deja el runtime vacío, así que tras revertir se
+    reintenta la sincronización con el estado anterior para dejar el emulador
+    como estaba.
+    """
+    _write_file(path, updated)
+
+    try:
+        return sync(environment)
+    except (KvmError, emulator.EmulatorError) as exc:
+        logger.error(f"Sincronización fallida, revirtiendo '{path}': {exc}")
+        _write_file(path, previous)
+
+        try:
+            sync(environment)
+        except (KvmError, emulator.EmulatorError) as restore_exc:
+            logger.error(f"No se pudo restaurar el estado previo del emulador: {restore_exc}")
+
+        raise
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CRUD de KVM
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def create_map(
+    name: str,
+    scope: str = SCOPE_ENVIRONMENT,
+    encrypted: bool = False,
+    entries: Optional[List[Dict[str, str]]] = None,
+    environment: Optional[str] = None,
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Crea un KVM en el workspace y lo carga en el emulador."""
+    scope = normalize_scope(scope)
+    env = environment or settings.APIGEE_ENVIRONMENT
+    clean = validate_name(name, "KVM")
+
+    if find_map(clean, env):
+        raise KvmError(f"Ya existe un KVM llamado '{clean}'.")
+
+    normalized = _validate_entries(entries or [])
+    now = _now_millis()
+    path = kvm_file(scope, env)
+    previous = _load_for_write(path)
+
+    updated = previous + [
+        {
+            "name": clean,
+            "encrypted": bool(encrypted),
+            "entry": normalized,
+            "createdAt": now,
+            "lastModifiedAt": now,
+        }
+    ]
+
+    result = _save_and_sync(path, previous, updated, env)
+    logger.info(f"KVM '{clean}' creado con scope '{scope}' en {path}")
+    return get_map(clean, scope, env), result
+
+
+def update_map(
+    name: str,
+    scope: str,
+    new_name: Optional[str] = None,
+    encrypted: Optional[bool] = None,
+    entries: Optional[List[Dict[str, str]]] = None,
+    environment: Optional[str] = None,
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Renombra un KVM, cambia su cifrado o reemplaza todas sus entradas."""
+    scope = normalize_scope(scope)
+    env = environment or settings.APIGEE_ENVIRONMENT
+    path = kvm_file(scope, env)
+    previous = _load_for_write(path)
+    index = _index_of(previous, name)
+
+    if index is None:
+        raise KvmError(f"El KVM '{name}' no existe en el scope '{scope}'.")
+
+    updated = [dict(item) for item in previous]
+    target = updated[index]
+    final_name = str(target.get("name", name))
+
+    if new_name is not None and new_name.strip().lower() != final_name.lower():
+        final_name = validate_name(new_name, "KVM")
+        if find_map(final_name, env):
+            raise KvmError(f"Ya existe un KVM llamado '{final_name}'.")
+        target["name"] = final_name
+
+    if encrypted is not None:
+        target["encrypted"] = bool(encrypted)
+
+    if entries is not None:
+        target["entry"] = _validate_entries(entries)
+
+    target["lastModifiedAt"] = _now_millis()
+    if not target.get("createdAt"):
+        target["createdAt"] = target["lastModifiedAt"]
+
+    result = _save_and_sync(path, previous, updated, env)
+    logger.info(f"KVM '{name}' actualizado en {path}")
+    return get_map(final_name, scope, env), result
+
+
+def delete_map(
+    name: str, scope: str, environment: Optional[str] = None
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Saca el KVM del workspace y lo descarga del emulador."""
+    scope = normalize_scope(scope)
+    env = environment or settings.APIGEE_ENVIRONMENT
+    path = kvm_file(scope, env)
+    previous = _load_for_write(path)
+    index = _index_of(previous, name)
+
+    if index is None:
+        raise KvmError(f"El KVM '{name}' no existe en el scope '{scope}'.")
+
+    removed = _to_api(previous[index], scope, path, env)
+    updated = [item for i, item in enumerate(previous) if i != index]
+
+    result = _save_and_sync(path, previous, updated, env)
+    logger.info(f"KVM '{name}' eliminado de {path}")
+    return removed, result
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CRUD de llaves
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def add_entry(
+    map_name: str,
+    scope: str,
+    entry_name: str,
+    value: str = "",
+    environment: Optional[str] = None,
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Agrega una llave al KVM."""
+    current = _require_map(map_name, scope, environment)
+    clean = validate_name(entry_name, "llave")
+
+    if any(entry["name"].lower() == clean.lower() for entry in current["entries"]):
+        raise KvmError(f"La llave '{clean}' ya existe en el KVM '{current['name']}'.")
+
+    entries = current["entries"] + [{"name": clean, "value": "" if value is None else str(value)}]
+    return update_map(current["name"], scope, entries=entries, environment=environment)
+
+
+def update_entry(
+    map_name: str,
+    scope: str,
+    entry_name: str,
+    value: Optional[str] = None,
+    new_name: Optional[str] = None,
+    environment: Optional[str] = None,
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Cambia el valor de una llave y, opcionalmente, su nombre."""
+    current = _require_map(map_name, scope, environment)
+    lowered = (entry_name or "").lower()
+    entries = [dict(entry) for entry in current["entries"]]
+    index = next((i for i, e in enumerate(entries) if e["name"].lower() == lowered), None)
+
+    if index is None:
+        raise KvmError(f"La llave '{entry_name}' no existe en el KVM '{current['name']}'.")
+
+    if new_name is not None and new_name.strip().lower() != lowered:
+        clean = validate_name(new_name, "llave")
+        if any(e["name"].lower() == clean.lower() for i, e in enumerate(entries) if i != index):
+            raise KvmError(f"La llave '{clean}' ya existe en el KVM '{current['name']}'.")
+        entries[index]["name"] = clean
+
+    if value is not None:
+        entries[index]["value"] = str(value)
+
+    return update_map(current["name"], scope, entries=entries, environment=environment)
+
+
+def delete_entry(
+    map_name: str, scope: str, entry_name: str, environment: Optional[str] = None
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Elimina una llave del KVM."""
+    current = _require_map(map_name, scope, environment)
+    lowered = (entry_name or "").lower()
+    entries = [entry for entry in current["entries"] if entry["name"].lower() != lowered]
+
+    if len(entries) == len(current["entries"]):
+        raise KvmError(f"La llave '{entry_name}' no existe en el KVM '{current['name']}'.")
+
+    return update_map(current["name"], scope, entries=entries, environment=environment)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Auxiliares
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _index_of(maps: List[Dict[str, Any]], name: str) -> Optional[int]:
+    lowered = (name or "").lower()
+    return next(
+        (i for i, item in enumerate(maps) if str(item.get("name", "")).lower() == lowered), None
+    )
+
+
+def _require_map(map_name: str, scope: str, environment: Optional[str]) -> Dict[str, Any]:
+    current = get_map(map_name, scope, environment)
+
+    if not current:
+        raise KvmError(f"El KVM '{map_name}' no existe en el scope '{normalize_scope(scope)}'.")
+
+    return current
+
+
+def _validate_entries(entries: Any) -> List[Dict[str, str]]:
+    """Valida la lista completa de entradas antes de tocar el disco."""
+    normalized = _normalize_entries(entries)
+    seen = set()
+
+    for entry in normalized:
+        clean = validate_name(entry["name"], "llave")
+        if clean.lower() in seen:
+            raise KvmError(f"La llave '{clean}' está repetida dentro del KVM.")
+        seen.add(clean.lower())
+        entry["name"] = clean
+
+    return normalized

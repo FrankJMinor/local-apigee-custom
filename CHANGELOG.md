@@ -58,8 +58,40 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
   desde la tabla.
 - `POST /v1/organizations/{org}/sharedflows`, `POST /v1/sharedflows/{flow}/update`,
   `DELETE /v1/organizations/{org}/sharedflows/{flow}` y `POST /v1/sharedflows/delete`.
+- Administración de Key Value Maps desde la UI: la tabla de *Key Value Maps* deja de ser
+  una plantilla con datos falsos y muestra los KVM reales del contenedor. Scope, cifrado,
+  número de entradas y fecha de modificación salen del propio KVM, y una columna nueva
+  indica si el emulador lo tiene cargado.
+- Vista de edición de un KVM (`/kvm/:nombre`): tabla estilo cliente de base de datos para
+  buscar por llave o valor, filtrar por filas vacías o con valor, ordenar por cualquier
+  columna y paginar; alta, edición en línea y borrado de llaves, individual o por selección
+  múltiple. Los KVM cifrados enmascaran los valores con un botón *Mostrar valores*.
+- `APIs/kvms.py`: CRUD de KVM sobre los `kvms.json` del workspace y sincronización con el
+  runtime. Los KVM no entran por el contrato del emulador (`ApigeeSource` no lee
+  `kvms.json`), sino por su API de datos de prueba: `POST /v1/emulator/setup/tests` con un
+  ZIP que contiene `maps.json`, y `GET /v1/emulator/test/maps` para leer lo cargado. Es la
+  misma puerta que usa Cloud Code.
+- Réplica local de la API de KVM de Apigee, con el scope implícito en la ruta:
+  `GET|POST /v1/organizations/{org}[/environments/{env}]/keyvaluemaps`,
+  `GET|PUT|DELETE .../keyvaluemaps/{map}`, `GET|POST .../keyvaluemaps/{map}/entries` y
+  `GET|PUT|DELETE .../keyvaluemaps/{map}/entries/{key}`. Se añaden `GET /v1/keyvaluemaps`
+  (catálogo de los dos scopes cruzado con el runtime) y `POST /v1/keyvaluemaps/sync`.
+- Scope `organization` para KVM, en `src/main/apigee/organization/kvms.json`. Son los dos
+  únicos scopes que distingue el emulador: `KeyValueMapLoader` manda a `createOrgScope`
+  todo lo que no sea `environment`.
+- Los KVM creados desde la UI guardan `createdAt` y `lastModifiedAt` en milisegundos, al
+  estilo de las demás entidades de Apigee. Un `kvms.json` escrito a mano sigue funcionando:
+  la fecha cae a la del archivo.
+- `emulator.push_test_data()`, `emulator.get_test_maps()` y `emulator.clear_test_data()`.
+- Componentes `ConfirmDialog` (confirmación de acciones destructivas, reutilizable) y
+  `NewKvmModal` (alta de KVM con sus entradas iniciales).
 
 ### Cambiado
+- Los nombres de KVM y de llave se validan en el backend con la misma expresión que aplica
+  el emulador (`KeyValueMapUtil.ENTITY_NAME_PATTERN`): mínimo dos caracteres y sin `/`. No
+  es cosmético: `POST /v1/emulator/setup/tests` reemplaza todos los datos de prueba y, si un
+  cargador falla, deja el runtime **sin ningún** KVM. Si aun así el emulador rechaza la
+  carga, el backend revierte el `kvms.json` y vuelve a sincronizar el estado anterior.
 - `APIs/bundles.py` pasa a estar parametrizado por `ArtifactKind`: proxies y shared flows
   comparten implementación en lugar de duplicarla. Los modales de alta y borrado de la UI
   reciben el tipo por prop.

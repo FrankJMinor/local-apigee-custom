@@ -7,16 +7,6 @@ export const SHARED_FLOWS = [
   { name: 'jwt-validation-flow',   revision: '1', state: 'error',      usage: 0,  lastModified: '2026-04-22T08:30:00' },
 ]
 
-export const KEY_VALUE_MAPS = [
-  { name: 'api-credentials',     scope: 'organization', encrypted: true,  entries: 8,  lastModified: '2026-04-27T10:30:00' },
-  { name: 'environment-config',  scope: 'environment',  encrypted: false, entries: 15, lastModified: '2026-04-26T14:45:00' },
-  { name: 'rate-limit-config',   scope: 'environment',  encrypted: false, entries: 4,  lastModified: '2026-04-25T09:00:00' },
-  { name: 'oauth-secrets',       scope: 'organization', encrypted: true,  entries: 6,  lastModified: '2026-04-24T16:20:00' },
-  { name: 'users-proxy-config',  scope: 'proxy',        encrypted: false, entries: 3,  lastModified: '2026-04-23T11:15:00' },
-  { name: 'feature-flags',       scope: 'environment',  encrypted: false, entries: 12, lastModified: '2026-04-22T08:30:00' },
-  { name: 'external-endpoints',  scope: 'organization', encrypted: true,  entries: 20, lastModified: '2026-04-21T13:00:00' },
-]
-
 export const RECENT_ACTIVITY = [
   { action: 'Desplegado users-api-proxy',       time: '2026-04-29T07:00:00' },
   { action: 'Actualizado auth-validation-flow', time: '2026-04-29T05:00:00' },

@@ -29,6 +29,12 @@ from APIs.views import (
     ApigeeProxyDetailView,
     EmulatorDeployView,
     EmulatorStatusView,
+    KeyValueMapCatalogView,
+    KeyValueMapDetailView,
+    KeyValueMapEntryDetailView,
+    KeyValueMapEntryListView,
+    KeyValueMapListView,
+    KeyValueMapSyncView,
     ProxyBulkDeleteView,
     ProxyDeployedListView,
     ProxyFileListView,
@@ -95,6 +101,44 @@ urlpatterns = [
     path("v1/sharedflows/<str:shared_flow_name>/update", SharedFlowFileUpdateView.as_view()),
     # Ruta para obtener el menú de políticas
     path("v1/policies/menu", ApigeePolicyMenuView.as_view()),
+    # ── Key Value Maps ────────────────────────────────────────────────────────
+    # Catálogo que consume la tabla de la UI: los dos scopes en una llamada, ya
+    # cruzados con los KVM que el contenedor del emulador tiene cargados.
+    path("v1/keyvaluemaps", KeyValueMapCatalogView.as_view()),
+    # Reenvía el workspace al emulador (tras editar kvms.json a mano o reiniciar)
+    path("v1/keyvaluemaps/sync", KeyValueMapSyncView.as_view()),
+    # Réplica local de la API de Apigee. El scope va implícito en la ruta:
+    # sin `environments/<env>` es de organización, con él es de entorno.
+    path("v1/organizations/<str:org>/keyvaluemaps", KeyValueMapListView.as_view()),
+    path(
+        "v1/organizations/<str:org>/keyvaluemaps/<str:map_name>",
+        KeyValueMapDetailView.as_view(),
+    ),
+    path(
+        "v1/organizations/<str:org>/keyvaluemaps/<str:map_name>/entries",
+        KeyValueMapEntryListView.as_view(),
+    ),
+    path(
+        "v1/organizations/<str:org>/keyvaluemaps/<str:map_name>/entries/<str:entry_name>",
+        KeyValueMapEntryDetailView.as_view(),
+    ),
+    path(
+        "v1/organizations/<str:org>/environments/<str:env>/keyvaluemaps",
+        KeyValueMapListView.as_view(),
+    ),
+    path(
+        "v1/organizations/<str:org>/environments/<str:env>/keyvaluemaps/<str:map_name>",
+        KeyValueMapDetailView.as_view(),
+    ),
+    path(
+        "v1/organizations/<str:org>/environments/<str:env>/keyvaluemaps/<str:map_name>/entries",
+        KeyValueMapEntryListView.as_view(),
+    ),
+    path(
+        "v1/organizations/<str:org>/environments/<str:env>/keyvaluemaps/"
+        "<str:map_name>/entries/<str:entry_name>",
+        KeyValueMapEntryDetailView.as_view(),
+    ),
     # 2. Las rutas de la documentación
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     # Levanta la interfaz interactiva (Swagger) en tu navegador

@@ -19,7 +19,7 @@ from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from . import bundles, emulator, trace
+from . import bundles, emulator, kvms, trace
 from .services import (
     get_current_revision,
     get_latest_revision_path,
@@ -1212,3 +1212,346 @@ class ProxyInvokeView(APIView):
         result["method"] = method
         logger.info(f"Invocado {method} {path} -> {result['statusCode']} ({result['elapsedMs']} ms)")
         return Response(result)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Key Value Maps
+#
+# Las rutas replican las de la API de administración de Apigee
+# (`/v1/organizations/{org}/keyvaluemaps` y su variante por environment), de modo
+# que el scope se deduce de la URL: si trae `environments/<env>` es un KVM de
+# entorno; si no, es de organización. `KeyValueMapCatalogView` es el añadido
+# local que la UI usa para pintar la tabla de una sola llamada.
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _kvm_scope(env):
+    """Scope implícito en la ruta: con environment es de entorno, sin él de org."""
+    return kvms.SCOPE_ENVIRONMENT if env else kvms.SCOPE_ORGANIZATION
+
+
+def _kvm_error(exc, http_status=status.HTTP_400_BAD_REQUEST):
+    return Response({"error": str(exc)}, status=http_status)
+
+
+def _emulator_error(exc):
+    return Response(
+        {"error": exc.message, "detail": exc.detail},
+        status=status.HTTP_502_BAD_GATEWAY,
+    )
+
+
+class KeyValueMapCatalogView(APIView):
+    """Todos los KVM del workspace cruzados con lo que el emulador tiene cargado."""
+
+    @extend_schema(
+        summary="Lista los KVM del workspace y su estado en el emulador",
+        description=(
+            "Devuelve los KVM de los dos scopes que soporta el emulador "
+            "(`organization` y `environment`) leyendo los `kvms.json` del "
+            "workspace, y los cruza con `GET /v1/emulator/test/maps` para marcar "
+            "cuáles están realmente cargados en el contenedor.\n\n"
+            "El runtime no expone los valores de las llaves, solo sus nombres: los "
+            "valores salen del workspace, que es la fuente de verdad."
+        ),
+        parameters=[OpenApiParameter("environment", str, description="Environment a consultar.")],
+        responses={200: dict, 400: dict},
+    )
+    def get(self, request):
+        environment = request.query_params.get("environment") or settings.APIGEE_ENVIRONMENT
+
+        try:
+            return Response(kvms.catalog(environment))
+        except kvms.KvmError as exc:
+            return _kvm_error(exc)
+
+
+class KeyValueMapSyncView(APIView):
+    """Reenvía al emulador todos los KVM del workspace."""
+
+    @extend_schema(
+        summary="Sincroniza los KVM del workspace con el emulador",
+        description=(
+            "Empaqueta los `kvms.json` en el `testdata.zip` que espera "
+            "`POST /v1/emulator/setup/tests` y lo carga. Útil cuando el "
+            "`kvms.json` se editó a mano o cuando el contenedor se reinició, "
+            "porque los datos de prueba del emulador no sobreviven al reinicio."
+        ),
+        responses={200: dict, 400: dict, 502: dict},
+    )
+    def post(self, request):
+        payload = request.data if isinstance(request.data, dict) else {}
+        environment = payload.get("environment") or settings.APIGEE_ENVIRONMENT
+
+        try:
+            result = kvms.sync(environment)
+        except kvms.KvmError as exc:
+            return _kvm_error(exc)
+        except emulator.EmulatorError as exc:
+            return _emulator_error(exc)
+
+        return Response(result)
+
+
+class KeyValueMapListView(APIView):
+    """Colección de KVM de un scope: listar y crear."""
+
+    @extend_schema(
+        summary="Lista los KVM de un scope",
+        responses={200: dict, 400: dict},
+    )
+    def get(self, request, org, env=None):
+        environment = env or request.query_params.get("environment")
+
+        try:
+            maps = kvms.load_scope(_kvm_scope(env), environment)
+        except kvms.KvmError as exc:
+            return _kvm_error(exc)
+
+        return Response({"keyValueMaps": maps})
+
+    @extend_schema(
+        summary="Crea un KVM y lo carga en el emulador",
+        description=(
+            "Escribe el KVM en el `kvms.json` del scope y lo empuja al runtime. "
+            "Si el emulador rechaza la carga, el archivo vuelve a su estado anterior."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "encrypted": {"type": "boolean", "default": False},
+                    "entries": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "value": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+                "required": ["name"],
+            }
+        },
+        responses={201: dict, 400: dict, 502: dict},
+    )
+    def post(self, request, org, env=None):
+        payload = request.data if isinstance(request.data, dict) else {}
+        environment = env or payload.get("environment")
+
+        try:
+            created, result = kvms.create_map(
+                name=payload.get("name", ""),
+                # El scope lo fija la ruta, igual que en la API de Apigee: no se
+                # acepta por cuerpo para que la URL y el archivo nunca discrepen.
+                scope=_kvm_scope(env),
+                encrypted=_as_bool(payload.get("encrypted", False)),
+                entries=payload.get("entries") or [],
+                environment=environment,
+            )
+        except kvms.KvmError as exc:
+            logger.warning(f"Alta de KVM rechazada: {exc}")
+            return _kvm_error(exc)
+        except emulator.EmulatorError as exc:
+            return _emulator_error(exc)
+
+        return Response({"keyValueMap": created, **result}, status=status.HTTP_201_CREATED)
+
+
+class KeyValueMapDetailView(APIView):
+    """Un KVM concreto: consultar, actualizar y eliminar."""
+
+    @extend_schema(summary="Devuelve un KVM con sus entradas", responses={200: dict, 404: dict})
+    def get(self, request, org, map_name, env=None):
+        environment = env or request.query_params.get("environment")
+
+        try:
+            found = kvms.get_map(map_name, _kvm_scope(env), environment)
+        except kvms.KvmError as exc:
+            return _kvm_error(exc)
+
+        if not found:
+            return Response(
+                {"error": f"El KVM '{map_name}' no existe."}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        return Response(found)
+
+    @extend_schema(
+        summary="Renombra un KVM, cambia su cifrado o reemplaza sus entradas",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Nombre nuevo."},
+                    "encrypted": {"type": "boolean"},
+                    "entries": {"type": "array", "items": {"type": "object"}},
+                },
+            }
+        },
+        responses={200: dict, 400: dict, 502: dict},
+    )
+    def put(self, request, org, map_name, env=None):
+        payload = request.data if isinstance(request.data, dict) else {}
+        environment = env or payload.get("environment")
+        encrypted = payload.get("encrypted")
+
+        try:
+            updated, result = kvms.update_map(
+                name=map_name,
+                scope=_kvm_scope(env),
+                new_name=payload.get("name"),
+                encrypted=None if encrypted is None else _as_bool(encrypted),
+                entries=payload.get("entries"),
+                environment=environment,
+            )
+        except kvms.KvmError as exc:
+            return _kvm_error(exc)
+        except emulator.EmulatorError as exc:
+            return _emulator_error(exc)
+
+        return Response({"keyValueMap": updated, **result})
+
+    @extend_schema(summary="Elimina un KVM", responses={200: dict, 400: dict, 502: dict})
+    def delete(self, request, org, map_name, env=None):
+        environment = env or request.query_params.get("environment")
+
+        try:
+            removed, result = kvms.delete_map(map_name, _kvm_scope(env), environment)
+        except kvms.KvmError as exc:
+            return _kvm_error(exc)
+        except emulator.EmulatorError as exc:
+            return _emulator_error(exc)
+
+        return Response({"keyValueMap": removed, **result})
+
+
+class KeyValueMapEntryListView(APIView):
+    """Llaves de un KVM: listar y agregar."""
+
+    @extend_schema(summary="Lista las llaves de un KVM", responses={200: dict, 404: dict})
+    def get(self, request, org, map_name, env=None):
+        environment = env or request.query_params.get("environment")
+
+        try:
+            found = kvms.get_map(map_name, _kvm_scope(env), environment)
+        except kvms.KvmError as exc:
+            return _kvm_error(exc)
+
+        if not found:
+            return Response(
+                {"error": f"El KVM '{map_name}' no existe."}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        return Response({"entry": found["entries"], "totalEntries": found["entryCount"]})
+
+    @extend_schema(
+        summary="Agrega una llave al KVM",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}, "value": {"type": "string"}},
+                "required": ["name"],
+            }
+        },
+        responses={201: dict, 400: dict, 502: dict},
+    )
+    def post(self, request, org, map_name, env=None):
+        payload = request.data if isinstance(request.data, dict) else {}
+        environment = env or payload.get("environment")
+
+        try:
+            updated, result = kvms.add_entry(
+                map_name=map_name,
+                scope=_kvm_scope(env),
+                entry_name=payload.get("name", ""),
+                value=payload.get("value", ""),
+                environment=environment,
+            )
+        except kvms.KvmError as exc:
+            return _kvm_error(exc)
+        except emulator.EmulatorError as exc:
+            return _emulator_error(exc)
+
+        return Response({"keyValueMap": updated, **result}, status=status.HTTP_201_CREATED)
+
+
+class KeyValueMapEntryDetailView(APIView):
+    """Una llave concreta: consultar, actualizar y eliminar."""
+
+    @extend_schema(summary="Devuelve una llave del KVM", responses={200: dict, 404: dict})
+    def get(self, request, org, map_name, entry_name, env=None):
+        environment = env or request.query_params.get("environment")
+
+        try:
+            found = kvms.get_map(map_name, _kvm_scope(env), environment)
+        except kvms.KvmError as exc:
+            return _kvm_error(exc)
+
+        entry = next(
+            (
+                e
+                for e in (found or {}).get("entries", [])
+                if e["name"].lower() == entry_name.lower()
+            ),
+            None,
+        )
+
+        if not entry:
+            return Response(
+                {"error": f"La llave '{entry_name}' no existe en el KVM '{map_name}'."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(entry)
+
+    @extend_schema(
+        summary="Actualiza el valor de una llave (y opcionalmente su nombre)",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}, "value": {"type": "string"}},
+            }
+        },
+        responses={200: dict, 400: dict, 502: dict},
+    )
+    def put(self, request, org, map_name, entry_name, env=None):
+        payload = request.data if isinstance(request.data, dict) else {}
+        environment = env or payload.get("environment")
+
+        try:
+            updated, result = kvms.update_entry(
+                map_name=map_name,
+                scope=_kvm_scope(env),
+                entry_name=entry_name,
+                value=payload.get("value"),
+                new_name=payload.get("name"),
+                environment=environment,
+            )
+        except kvms.KvmError as exc:
+            return _kvm_error(exc)
+        except emulator.EmulatorError as exc:
+            return _emulator_error(exc)
+
+        return Response({"keyValueMap": updated, **result})
+
+    @extend_schema(summary="Elimina una llave del KVM", responses={200: dict, 400: dict, 502: dict})
+    def delete(self, request, org, map_name, entry_name, env=None):
+        environment = env or request.query_params.get("environment")
+
+        try:
+            updated, result = kvms.delete_entry(
+                map_name=map_name,
+                scope=_kvm_scope(env),
+                entry_name=entry_name,
+                environment=environment,
+            )
+        except kvms.KvmError as exc:
+            return _kvm_error(exc)
+        except emulator.EmulatorError as exc:
+            return _emulator_error(exc)
+
+        return Response({"keyValueMap": updated, **result})

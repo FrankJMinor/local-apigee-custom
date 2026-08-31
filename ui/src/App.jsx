@@ -7,6 +7,7 @@ import ProxyDetailPage from './pages/ProxyDetailPage'
 import SharedFlows  from './pages/SharedFlows'
 import SharedFlowDetailPage from './pages/SharedFlowDetailPage';
 import KeyValueMaps from './pages/KeyValueMaps'
+import KeyValueMapDetail from './pages/KeyValueMapDetail'
 import Configuracion  from './pages/Configuracion'
 import TraceAnalyzer  from './pages/TraceAnalyzer'
 
@@ -27,6 +28,7 @@ function App() {
         <Route path="/shared-flows" element={<SharedFlows />} />
         <Route path="/shared-flows/:sharedFlowName" element={<SharedFlowDetailPage />} />
         <Route path="/kvm"          element={<KeyValueMaps />} />
+        <Route path="/kvm/:kvmName" element={<KeyValueMapDetail />} />
         <Route path="/config"       element={<Configuracion />} />
         <Route path="/trace"        element={<TraceAnalyzer />} />
         <Route path="*"             element={<Navigate to="/" replace />} />
