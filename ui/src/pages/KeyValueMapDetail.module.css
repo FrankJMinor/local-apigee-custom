@@ -152,6 +152,11 @@
   border-color: rgba(34, 197, 94, 0.35);
   color: #16a34a;
 }
+.banner[data-tone='warn'] {
+  background: rgba(217, 119, 6, 0.1);
+  border-color: rgba(217, 119, 6, 0.35);
+  color: #d97706;
+}
 
 /* ── Tarjeta de la tabla ── */
 .card {
@@ -296,6 +301,23 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.94em;
   font-weight: 600;
+}
+
+/* Llave presente en el workspace que el emulador no puede cargar */
+.offRuntime {
+  display: inline-block;
+  margin-left: 0.6em;
+  padding: 1px 7px;
+  border-radius: 20px;
+  font-family: inherit;
+  font-size: 0.72em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: rgba(217, 119, 6, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(217, 119, 6, 0.35);
+  vertical-align: middle;
+  cursor: help;
 }
 .valueCell { max-width: 520px; }
 .value {

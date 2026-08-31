@@ -128,10 +128,18 @@ export function EdgeSyncModal({ isOpen, environment, onClose, onImported }) {
                     importaron enmascarados: {result.masked.join(', ')}.
                   </div>
                 )}
+                {result.notLoadable?.length > 0 && (
+                  <div className={s.hintLine}>
+                    Todo quedó guardado en el workspace. El emulador no puede cargar{' '}
+                    {result.notLoadable.reduce((n, m) => n + m.keys.length, 0)} llave(s) de{' '}
+                    {result.notLoadable.length} KVM porque su nombre lleva “/” o tiene menos de
+                    dos caracteres: {result.notLoadable.map(m => m.map).join(', ')}.
+                  </div>
+                )}
                 {result.skipped?.length > 0 && (
                   <div className={s.hintLine}>
-                    {result.skipped.length} omitidos por nombre no válido para el emulador:{' '}
-                    {result.skipped.map(x => x.name).join(', ')}.
+                    {result.skipped.length} no se pudieron guardar:{' '}
+                    {result.skipped.map(x => `${x.name} (${x.reason})`).join('; ')}
                   </div>
                 )}
               </div>

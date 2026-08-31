@@ -105,23 +105,37 @@ def kvm_file(scope: str, environment: Optional[str] = None) -> str:
     return os.path.join(apigee_root, "environments", env, KVM_FILE)
 
 
-def validate_name(name: str, label: str = "KVM") -> str:
-    """Valida un nombre de KVM o de llave con las reglas del emulador.
+RUNTIME_NAME_HELP = (
+    "Debe tener al menos dos caracteres, empezar por una letra, un número o uno "
+    "de '. _ - $', y no puede contener '/'."
+)
 
-    Es preferible rechazar aquí que dejar que falle el emulador: un
-    ``setup/tests`` inválido deja el runtime **sin ningún** KVM cargado.
+
+def runtime_accepts(name: str) -> bool:
+    """Indica si el cargador del emulador aceptaría ese nombre.
+
+    Comprobado contra el contenedor: rechaza los nombres de una sola letra y
+    cualquiera que contenga ``/``, que es justo la forma que tienen las llaves
+    de los KVM de rutas de Edge (``GET/v1/recurso``). Aceptar espacios, puntos,
+    acentos o empezar por dígito sí los admite.
+    """
+    return bool(ENTITY_NAME_PATTERN.fullmatch((name or "").strip()))
+
+
+def validate_name(name: str, label: str = "KVM") -> str:
+    """Valida un nombre escrito a mano con las reglas del emulador.
+
+    Solo se aplica a lo que teclea una persona (alta, renombrado, llave nueva):
+    ahí conviene avisar en el momento, porque tiene arreglo. La importación
+    desde Edge no pasa por aquí; ver :func:`import_maps`.
     """
     clean = (name or "").strip()
 
     if not clean:
         raise KvmError(f"El nombre del {label} es obligatorio.")
 
-    if not ENTITY_NAME_PATTERN.fullmatch(clean):
-        raise KvmError(
-            f"Nombre de {label} inválido: '{clean}'. "
-            "Debe tener al menos dos caracteres, empezar por una letra, un número "
-            "o uno de '. _ - $', y no puede contener '/'."
-        )
+    if not runtime_accepts(clean):
+        raise KvmError(f"Nombre de {label} inválido: '{clean}'. {RUNTIME_NAME_HELP}")
 
     return clean
 
@@ -250,12 +264,20 @@ def _normalize_entries(raw: Any) -> List[Dict[str, str]]:
 
 
 def _to_api(raw: Dict[str, Any], scope: str, path: str, environment: str) -> Dict[str, Any]:
-    """Convierte un KVM del archivo en el objeto que consume la UI."""
+    """Convierte un KVM del archivo en el objeto que consume la UI.
+
+    ``notLoadableKeys`` son las llaves que están en el workspace pero que el
+    cargador del emulador no admite (las de forma ``GET/v1/recurso``, sobre todo).
+    La UI las marca para que quede claro que existen en el archivo pero no en el
+    runtime local.
+    """
     entries = _normalize_entries(raw.get("entry", raw.get("entries")))
     fallback = _file_millis(path)
+    name = str(raw.get("name", ""))
+    not_loadable = [entry["name"] for entry in entries if not runtime_accepts(entry["name"])]
 
     return {
-        "name": str(raw.get("name", "")),
+        "name": name,
         "scope": scope,
         "environment": environment if scope == SCOPE_ENVIRONMENT else None,
         "encrypted": bool(raw.get("encrypted", False)),
@@ -264,6 +286,8 @@ def _to_api(raw: Dict[str, Any], scope: str, path: str, environment: str) -> Dic
         "createdAt": raw.get("createdAt") or fallback,
         "lastModifiedAt": raw.get("lastModifiedAt") or fallback,
         "source": os.path.relpath(path, settings.APIGEE_SOURCE_ROOT).replace(os.sep, "/"),
+        "notLoadableKeys": not_loadable,
+        "loadable": runtime_accepts(name),
     }
 
 
@@ -336,6 +360,10 @@ def catalog(environment: Optional[str] = None) -> Dict[str, Any]:
 
     Cada KVM lleva ``deployed`` e ``inSync`` para que la UI pueda distinguir uno
     recién escrito de otro que el emulador ya tiene cargado.
+
+    ``inSync`` se compara contra las llaves que el emulador *puede* cargar, no
+    contra todas las del archivo: si no, un KVM de rutas —cuyas llaves con ``/``
+    nunca entran en el runtime— aparecería eternamente desincronizado.
     """
     env = environment or settings.APIGEE_ENVIRONMENT
     workspace = list_maps(env)
@@ -344,11 +372,13 @@ def catalog(environment: Optional[str] = None) -> Dict[str, Any]:
 
     for item in workspace:
         state = loaded.get(item["name"])
+        expected = sorted(e["name"] for e in item["entries"] if runtime_accepts(e["name"]))
+
         item["deployed"] = state is not None
         item["runtimeKeyCount"] = state["keyCount"] if state else 0
-        item["inSync"] = bool(state) and sorted(state["keys"]) == sorted(
-            e["name"] for e in item["entries"]
-        )
+        item["inSync"] = bool(state) and sorted(state["keys"]) == expected
+
+    not_loadable = [item for item in workspace if item["notLoadableKeys"] or not item["loadable"]]
 
     return {
         "environment": env,
@@ -357,6 +387,9 @@ def catalog(environment: Optional[str] = None) -> Dict[str, Any]:
         "runtimeError": runtime.get("error"),
         # KVM que el emulador tiene cargados pero que ya no están en el workspace.
         "orphanRuntimeMaps": sorted(set(loaded) - {item["name"] for item in workspace}),
+        # Cuántas llaves del workspace no puede sostener el runtime local.
+        "notLoadableKeyCount": sum(len(item["notLoadableKeys"]) for item in not_loadable),
+        "notLoadableMaps": [item["name"] for item in not_loadable],
     }
 
 
@@ -365,48 +398,94 @@ def catalog(environment: Optional[str] = None) -> Dict[str, Any]:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def build_testdata_archive(environment: Optional[str] = None) -> bytes:
-    """Empaqueta todos los KVM del workspace en el ``testdata.zip`` del emulador.
+def build_testdata_archive(
+    environment: Optional[str] = None,
+) -> Tuple[bytes, List[Dict[str, Any]]]:
+    """Empaqueta los KVM del workspace en el ``testdata.zip`` del emulador.
 
     El emulador espera ``maps.json`` con la forma que consume
     ``TestKeyValueMapDefinition``: ``[{name, scope, entries: {llave: valor}}]``.
+
+    El workspace puede contener nombres que el cargador no acepta —los KVM de
+    rutas de Edge llevan llaves como ``GET/v1/recurso``— y basta uno para que
+    ``setup/tests`` devuelva 400 y deje el runtime **sin ningún** KVM. Así que
+    aquí se descartan esos nombres en lugar de arriesgar la carga entera: el
+    archivo del workspace los conserva y el llamador recibe la lista para poder
+    avisar de qué se quedó fuera del runtime.
+
+    Returns:
+        Tuple[bytes, List[Dict]]: el ZIP y lo descartado, como
+        ``[{"map", "scope", "keys", "mapDropped"}]``.
     """
     definitions = []
+    dropped: List[Dict[str, Any]] = []
 
     for item in list_maps(environment):
-        entries = {}
-        for entry in item["entries"]:
-            validate_name(entry["name"], "llave")
-            entries[entry["name"]] = entry["value"]
+        if not runtime_accepts(item["name"]):
+            dropped.append(
+                {
+                    "map": item["name"],
+                    "scope": item["scope"],
+                    "keys": [entry["name"] for entry in item["entries"]],
+                    "mapDropped": True,
+                }
+            )
+            continue
 
-        validate_name(item["name"], "KVM")
+        entries = {}
+        rejected = []
+
+        for entry in item["entries"]:
+            if runtime_accepts(entry["name"]):
+                entries[entry["name"]] = entry["value"]
+            else:
+                rejected.append(entry["name"])
+
+        if rejected:
+            dropped.append(
+                {
+                    "map": item["name"],
+                    "scope": item["scope"],
+                    "keys": rejected,
+                    "mapDropped": False,
+                }
+            )
+
         definitions.append({"name": item["name"], "scope": item["scope"], "entries": entries})
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("maps.json", json.dumps(definitions, ensure_ascii=False, indent=2))
 
-    return buffer.getvalue()
+    return buffer.getvalue(), dropped
 
 
 def sync(environment: Optional[str] = None) -> Dict[str, Any]:
     """Empuja el workspace completo al runtime del emulador.
 
     Returns:
-        Dict[str, Any]: ``{"synced": <nº de KVM>, "environment": <env>}``.
+        Dict[str, Any]: ``synced`` (KVM cargados), ``environment`` y
+        ``notLoadable`` con lo que el emulador no admite (ver
+        :func:`build_testdata_archive`).
 
     Raises:
-        KvmError: Si algún nombre no pasa la validación del emulador.
         emulator.EmulatorError: Si el emulador rechaza la carga.
     """
     env = environment or settings.APIGEE_ENVIRONMENT
-    archive = build_testdata_archive(env)
+    archive, dropped = build_testdata_archive(env)
 
     emulator.push_test_data(archive)
     count = len(list_maps(env))
 
+    if dropped:
+        total = sum(len(item["keys"]) for item in dropped)
+        logger.warning(
+            f"{total} nombre(s) del workspace no los admite el emulador y quedaron fuera "
+            f"del runtime: {[item['map'] for item in dropped]}"
+        )
+
     logger.info(f"Sincronizados {count} KVM con el emulador ({len(archive)} bytes)")
-    return {"synced": count, "environment": env}
+    return {"synced": count, "environment": env, "notLoadable": dropped}
 
 
 def _save_and_sync(
@@ -616,10 +695,13 @@ def import_maps(
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Vuelca en el workspace los KVM traídos de Edge y los carga en el emulador.
 
-    Los nombres que el emulador no aceptaría se omiten en vez de abortar la
-    importación completa: en Edge puede haber KVM con nombres que aquí no valen,
-    y traerse los demás sigue siendo útil. Los omitidos se devuelven con su
-    motivo para poder mostrarlos.
+    **Se importa todo tal cual viene de Edge**, sin aplicar las reglas de nombres
+    del emulador. Los KVM de rutas llevan llaves con forma de URI
+    (``GET/v1/recurso``) que el cargador local no admite, y son precisamente los
+    que más falta hacen: descartarlos dejaría fuera del workspace lo importante.
+    El archivo del workspace guarda la copia fiel; el filtro se aplica solo al
+    empujar al emulador (ver :func:`build_testdata_archive`), que es donde un
+    nombre inválido tiene consecuencias reales.
 
     Args:
         maps: KVM en formato de workspace (``{"name", "encrypted", "entry"}``).
@@ -629,6 +711,8 @@ def import_maps(
 
     Returns:
         Tuple con el resumen (``created``, ``updated``, ``skipped``) y el sync.
+        ``skipped`` solo recoge lo que no se puede representar en el archivo:
+        un KVM sin nombre. El resto entra siempre.
     """
     scope = normalize_scope(scope)
     env = environment or settings.APIGEE_ENVIRONMENT
@@ -642,11 +726,16 @@ def import_maps(
     skipped: List[Dict[str, str]] = []
 
     for raw in maps:
+        name = str(raw.get("name", "")).strip()
+
+        if not name:
+            skipped.append({"name": "?", "reason": "Edge devolvió un KVM sin nombre."})
+            continue
+
         try:
-            name = validate_name(str(raw.get("name", "")), "KVM")
-            entries = _validate_entries(raw.get("entry", raw.get("entries")))
+            entries = _validate_entries(raw.get("entry", raw.get("entries")), strict=False)
         except KvmError as exc:
-            skipped.append({"name": str(raw.get("name", "?")), "reason": str(exc)})
+            skipped.append({"name": name, "reason": str(exc)})
             continue
 
         index = _index_of(updated, name)
@@ -766,15 +855,30 @@ def _require_map(map_name: str, scope: str, environment: Optional[str]) -> Dict[
     return current
 
 
-def _validate_entries(entries: Any) -> List[Dict[str, str]]:
-    """Valida la lista completa de entradas antes de tocar el disco."""
+def _validate_entries(entries: Any, strict: bool = True) -> List[Dict[str, str]]:
+    """Valida la lista completa de entradas antes de tocar el disco.
+
+    Args:
+        entries: Entradas en cualquiera de las dos formas admitidas.
+        strict: Con ``True`` (lo que teclea una persona) aplica las reglas de
+            nombres del emulador. Con ``False`` (importación desde Edge) solo
+            exige que la llave tenga nombre y no se repita: el workspace guarda
+            la copia fiel y el filtro se aplica al empujar al runtime.
+    """
     normalized = _normalize_entries(entries)
     seen = set()
 
     for entry in normalized:
-        clean = validate_name(entry["name"], "llave")
+        if strict:
+            clean = validate_name(entry["name"], "llave")
+        else:
+            clean = entry["name"].strip()
+            if not clean:
+                raise KvmError("El KVM trae una llave sin nombre.")
+
         if clean.lower() in seen:
             raise KvmError(f"La llave '{clean}' está repetida dentro del KVM.")
+
         seen.add(clean.lower())
         entry["name"] = clean
 

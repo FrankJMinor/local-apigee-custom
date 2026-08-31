@@ -100,6 +100,17 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
   estaban siempre visibles y las de los KVM no existían.
 - `POST /v1/keyvaluemaps/delete`: borra varios KVM (o todos, de los dos scopes) con una sola
   recarga del emulador en lugar de encadenar una por nombre.
+- La importación desde Edge ya no descarta KVM por nombres que el emulador no acepte: el
+  workspace guarda la copia fiel de lo que hay en Edge, incluidas las llaves con forma de URI
+  (`GET/v1/recurso`) de los KVM de rutas. El filtro se aplica solo al construir el
+  `testdata.zip`, que es donde un nombre inválido tiene consecuencias: `setup/tests` devuelve
+  400 y deja el runtime sin ningún KVM.
+- La UI marca las llaves que están en el workspace pero que el runtime local no puede sostener,
+  con una insignia por fila y un aviso en la cabecera del KVM. `inSync` se calcula contra las
+  llaves cargables, no contra todas, para que un KVM de rutas no aparezca eternamente
+  desincronizado.
+- `GET /v1/keyvaluemaps` añade `notLoadableKeys` y `loadable` por KVM, y los totales
+  `notLoadableKeyCount` y `notLoadableMaps`.
 
 ### Cambiado
 - El botón de sincronización de la tabla de KVM se separa en dos: **Recargar en emulador**

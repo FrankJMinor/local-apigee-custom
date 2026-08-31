@@ -300,8 +300,22 @@ Sin marcar *Reemplazar*, la importación es un *upsert*: crea los que faltan,
 actualiza los que coinciden por nombre y deja intactos los KVM locales que no
 existen en Edge. Marcándolo, el `kvms.json` queda solo con lo que vino de Edge.
 
-Los KVM cuyo nombre no cumple las reglas del emulador se omiten en vez de
-abortar la importación, y se listan en el resumen con el motivo.
+**Nombres que el emulador no admite**
+
+Comprobado contra el contenedor: el cargador rechaza los nombres de un solo
+carácter y cualquiera que contenga `/`. Acepta espacios, puntos, acentos y
+empezar por dígito. Justo los KVM de rutas de Edge (`routing-repository`,
+`*-flow-conditions`, `*-endpoint-repository`…) llevan llaves con forma de URI,
+así que caen en esa regla.
+
+La importación **no descarta nada**: el `kvms.json` guarda la copia fiel de lo
+que hay en Edge. El filtro se aplica solo al construir el `testdata.zip`, porque
+ahí sí tiene consecuencias —basta un nombre inválido para que `setup/tests`
+devuelva 400 y deje el runtime sin ningún KVM—. Se descartan las llaves
+concretas, no el KVM entero, así que el mapa se carga con el resto.
+
+La UI marca esas llaves con una insignia *sin runtime* y avisa en la cabecera
+del KVM: están en el archivo y en Edge, pero las políticas locales no las verán.
 
 **Borrado en bloque**
 

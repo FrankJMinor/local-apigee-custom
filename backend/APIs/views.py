@@ -59,7 +59,6 @@ def _sse(event: str, payload: dict) -> str:
     return f"event: {event}\ndata: {data}\n\n"
 
 
-
 class ApigeeOrganizationApisView(APIView):
     """
     Simula el endpoint oficial de Apigee: /v1/organizations/{org}/apis
@@ -1171,9 +1170,7 @@ class ProxyInvokeView(APIView):
         data = body.encode("utf-8") if body else None
 
         headers = {
-            str(k): str(v)
-            for k, v in (payload.get("headers") or {}).items()
-            if k and v is not None
+            str(k): str(v) for k, v in (payload.get("headers") or {}).items() if k and v is not None
         }
 
         started = time.monotonic()
@@ -1210,7 +1207,9 @@ class ProxyInvokeView(APIView):
         result["elapsedMs"] = round((time.monotonic() - started) * 1000)
         result["url"] = url
         result["method"] = method
-        logger.info(f"Invocado {method} {path} -> {result['statusCode']} ({result['elapsedMs']} ms)")
+        logger.info(
+            f"Invocado {method} {path} -> {result['statusCode']} ({result['elapsedMs']} ms)"
+        )
         return Response(result)
 
 

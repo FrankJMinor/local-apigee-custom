@@ -95,6 +95,11 @@ function KeyValueMapDetail() {
 
   const entries = useMemo(() => kvm?.entries || [], [kvm])
 
+  // Llaves que están en el archivo pero que el cargador del emulador rechaza
+  // (nombre con “/” o de un solo carácter): existen en el workspace, no en el
+  // runtime local. Las de los KVM de rutas de Edge caen todas aquí.
+  const notLoadable = useMemo(() => new Set(kvm?.notLoadableKeys || []), [kvm])
+
   // Buscar → filtrar → ordenar. El paginado se aplica después, sobre el resultado.
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase()
@@ -338,6 +343,17 @@ function KeyValueMapDetail() {
         </div>
       </div>
 
+      {notLoadable.size > 0 && (
+        <div className={s.banner} data-tone="warn">
+          <IconWarning size={15} />
+          <span>
+            {notLoadable.size} de las {entries.length} llaves están en el workspace pero el
+            emulador no las puede cargar: su nombre lleva “/” o tiene menos de dos caracteres.
+            Las políticas locales no las verán; en Apigee Edge siguen intactas.
+          </span>
+        </div>
+      )}
+
       {error && (
         <div className={s.banner} data-tone="error">
           <IconWarning size={15} /> <span>{error}</span>
@@ -542,7 +558,17 @@ function KeyValueMapDetail() {
                           onKeyDown={e => e.key === 'Escape' && setEditing(null)}
                         />
                       ) : (
-                        <span className={s.keyName}>{entry.name}</span>
+                        <span className={s.keyName}>
+                          {entry.name}
+                          {notLoadable.has(entry.name) && (
+                            <span
+                              className={s.offRuntime}
+                              title="El emulador no puede cargar esta llave: su nombre lleva “/” o tiene menos de dos caracteres. Está en el workspace, pero las políticas locales no la verán."
+                            >
+                              sin runtime
+                            </span>
+                          )}
+                        </span>
                       )}
                     </td>
                     <td className={s.valueCell}>
