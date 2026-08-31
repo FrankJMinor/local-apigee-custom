@@ -101,6 +101,48 @@ Para simular KVMs de la nube, se debe crear el archivo `./environments/apigee-de
 ]
 ```
 
+### Caches del environment
+
+Réplica de la pestaña *Environment Configuration → Caches* de Apigee Edge, bajo
+**Caches** en el menú. La tabla se edita en línea y se guarda entera con un
+botón, igual que la consola de Edge.
+
+Cada cache tiene nombre, descripción y una caducidad de uno de tres tipos, y el
+control cambia según el que se elija:
+
+| Tipo | Clave en el archivo | Control | Formato guardado |
+| --- | --- | --- | --- |
+| Tiempo de espera | `timeoutInSec` | número | segundos |
+| Hora del día | `timeOfDay` | hora | `HH:mm:ss` |
+| Fecha | `expiryDate` | fecha | `MM/DD/YYYY` |
+
+Se guarda en `src/main/apigee/environments/<env>/caches.json` con la forma que
+devuelve la API de administración de Edge, para poder promoverlo tal cual:
+
+```json
+[
+  {
+    "name": "token-cenam",
+    "description": "Store token for HSC",
+    "expirySettings": { "timeoutInSec": { "value": "120" } }
+  }
+]
+```
+
+**El emulador no aplica este archivo.** Su compilador de contratos no lo conoce
+—comprobado: un despliegue con `caches.json` presente compila sin quejarse, y
+simplemente lo ignora— y en local los caches se crean **bajo demanda**: cuando
+una política `PopulateCache` o `LookupCache` referencia un `<CacheResource>`,
+`L1CacheManagerCaffeineImpl` lo crea en ese momento. Es decir, las políticas
+locales funcionan sin declarar nada; esta pantalla es la configuración que exige
+Edge, versionada en Git. La UI lo dice en un aviso, para que nadie espere que
+cambiar aquí la caducidad afecte al runtime local.
+
+El nombre de un cache existente no se puede editar, igual que en Edge: es la
+referencia que usan los `<CacheResource>` de las políticas. La validación corre
+entera antes de escribir, así que una fila mal puesta no deja el archivo a
+medias ni pierde lo que había capturado.
+
 ### El dashboard
 
 Los totales, la actividad reciente y las alertas salen de `GET /v1/dashboard`, no

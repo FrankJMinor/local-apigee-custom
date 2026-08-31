@@ -27,6 +27,9 @@ from APIs.views import (
     ApigeeOrganizationSharedFlowsImportView,
     ApigeePolicyMenuView,
     ApigeeProxyDetailView,
+    CacheCatalogView,
+    CacheDetailView,
+    CacheListView,
     DashboardSummaryView,
     EdgeEnvironmentsView,
     EmulatorDeployView,
@@ -107,6 +110,18 @@ urlpatterns = [
     path("v1/policies/menu", ApigeePolicyMenuView.as_view()),
     # Resumen del entorno para el dashboard: totales, actividad y alertas reales
     path("v1/dashboard", DashboardSummaryView.as_view()),
+    # ── Caches del environment ────────────────────────────────────────────────
+    # Tabla de la UI: consulta y guardado en bloque (el "Save" de la consola).
+    path("v1/caches", CacheCatalogView.as_view()),
+    # Réplica local de la API de administración de Edge.
+    path(
+        "v1/organizations/<str:org>/environments/<str:env>/caches",
+        CacheListView.as_view(),
+    ),
+    path(
+        "v1/organizations/<str:org>/environments/<str:env>/caches/<str:cache_name>",
+        CacheDetailView.as_view(),
+    ),
     # ── Key Value Maps ────────────────────────────────────────────────────────
     # Catálogo que consume la tabla de la UI: los dos scopes en una llamada, ya
     # cruzados con los KVM que el contenedor del emulador tiene cargados.

@@ -19,7 +19,7 @@ from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from . import bundles, dashboard, edge, emulator, kvms, trace
+from . import bundles, caches, dashboard, edge, emulator, kvms, trace
 from .services import (
     get_current_revision,
     get_latest_revision_path,
@@ -1810,3 +1810,198 @@ class DashboardSummaryView(APIView):
             return Response(dashboard.summary(environment))
         except kvms.KvmError as exc:
             return _kvm_error(exc)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Caches del environment
+#
+# Réplica de la pestaña "Environment Configuration → Caches" de Apigee Edge. Las
+# rutas por cache siguen las de la API de administración; `CacheCatalogView`
+# añade el guardado en bloque que necesita la tabla, que es como funciona el
+# botón Save de la consola de Edge.
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _cache_error(exc, http_status=status.HTTP_400_BAD_REQUEST):
+    return Response({"error": str(exc)}, status=http_status)
+
+
+class CacheCatalogView(APIView):
+    """Caches del environment: consulta y guardado de la tabla completa."""
+
+    @extend_schema(
+        summary="Lista los caches configurados en el environment",
+        description=(
+            "Lee `src/main/apigee/environments/<env>/caches.json`.\n\n"
+            "El emulador **no aplica** este archivo: su compilador de contratos no "
+            "lo conoce y en local los caches se crean bajo demanda cuando una "
+            "política los referencia. Es la configuración de environment que exige "
+            "Edge, versionada en Git y lista para promover."
+        ),
+        parameters=[OpenApiParameter("environment", str, description="Environment a consultar.")],
+        responses={200: dict, 400: dict},
+    )
+    def get(self, request):
+        environment = request.query_params.get("environment") or settings.APIGEE_ENVIRONMENT
+
+        try:
+            return Response(caches.catalog(environment))
+        except caches.CacheError as exc:
+            return _cache_error(exc)
+
+    @extend_schema(
+        summary="Guarda la tabla completa de caches",
+        description=(
+            "Equivalente al botón *Save* de la consola de Edge: recibe la lista "
+            "entera y la reemplaza. Se valida todo antes de escribir, así que una "
+            "fila mal puesta no deja el archivo a medias."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "caches": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "description": {"type": "string"},
+                                "expiryType": {
+                                    "type": "string",
+                                    "enum": list(caches.EXPIRY_TYPES),
+                                },
+                                "expiryValue": {"type": "string"},
+                            },
+                            "required": ["name", "expiryType", "expiryValue"],
+                        },
+                    }
+                },
+                "required": ["caches"],
+            }
+        },
+        responses={200: dict, 400: dict},
+    )
+    def put(self, request):
+        payload = request.data if isinstance(request.data, dict) else {}
+        environment = payload.get("environment") or settings.APIGEE_ENVIRONMENT
+        rows = payload.get("caches")
+
+        if not isinstance(rows, list):
+            return Response(
+                {"error": "Envía la lista completa en 'caches'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            saved = caches.replace_all(rows, environment)
+        except caches.CacheError as exc:
+            logger.warning(f"Guardado de caches rechazado: {exc}")
+            return _cache_error(exc)
+
+        return Response({"environment": environment, "caches": saved, "saved": len(saved)})
+
+
+class CacheListView(APIView):
+    """Colección de caches de un environment: listar y crear."""
+
+    @extend_schema(summary="Lista los caches del environment", responses={200: dict, 400: dict})
+    def get(self, request, org, env):
+        try:
+            return Response({"cache": caches.list_caches(env)})
+        except caches.CacheError as exc:
+            return _cache_error(exc)
+
+    @extend_schema(
+        summary="Crea un cache en el environment",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "description": {"type": "string"},
+                    "expiryType": {"type": "string", "enum": list(caches.EXPIRY_TYPES)},
+                    "expiryValue": {"type": "string"},
+                },
+                "required": ["name"],
+            }
+        },
+        responses={201: dict, 400: dict},
+    )
+    def post(self, request, org, env):
+        payload = request.data if isinstance(request.data, dict) else {}
+
+        try:
+            created = caches.create_cache(
+                name=payload.get("name", ""),
+                description=payload.get("description", ""),
+                expiry_type=payload.get("expiryType") or caches.EXPIRY_TIMEOUT,
+                expiry_value=payload.get("expiryValue", "300"),
+                environment=env,
+            )
+        except caches.CacheError as exc:
+            return _cache_error(exc)
+
+        return Response({"cache": created}, status=status.HTTP_201_CREATED)
+
+
+class CacheDetailView(APIView):
+    """Un cache concreto: consultar, actualizar y eliminar."""
+
+    @extend_schema(summary="Devuelve un cache", responses={200: dict, 404: dict})
+    def get(self, request, org, env, cache_name):
+        try:
+            found = caches.get_cache(cache_name, env)
+        except caches.CacheError as exc:
+            return _cache_error(exc)
+
+        if not found:
+            return Response(
+                {"error": f"El cache '{cache_name}' no existe."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(found)
+
+    @extend_schema(
+        summary="Actualiza la descripción o la caducidad de un cache",
+        description=(
+            "El nombre no se puede cambiar, igual que en Edge: es la referencia "
+            "que usan los `<CacheResource>` de las políticas."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "description": {"type": "string"},
+                    "expiryType": {"type": "string", "enum": list(caches.EXPIRY_TYPES)},
+                    "expiryValue": {"type": "string"},
+                },
+            }
+        },
+        responses={200: dict, 400: dict},
+    )
+    def put(self, request, org, env, cache_name):
+        payload = request.data if isinstance(request.data, dict) else {}
+
+        try:
+            updated = caches.update_cache(
+                name=cache_name,
+                description=payload.get("description"),
+                expiry_type=payload.get("expiryType"),
+                expiry_value=payload.get("expiryValue"),
+                environment=env,
+            )
+        except caches.CacheError as exc:
+            return _cache_error(exc)
+
+        return Response({"cache": updated})
+
+    @extend_schema(summary="Elimina un cache", responses={200: dict, 400: dict})
+    def delete(self, request, org, env, cache_name):
+        try:
+            removed = caches.delete_cache(cache_name, env)
+        except caches.CacheError as exc:
+            return _cache_error(exc)
+
+        return Response({"cache": removed})

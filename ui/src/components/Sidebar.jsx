@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import {
   IconLogo, IconDashboard, IconProxies,
-  IconFlows, IconKVM, IconSettings, IconTrace,
+  IconFlows, IconKVM, IconCache, IconSettings, IconTrace,
 } from './Icons'
 import styles from './Sidebar.module.css'
 
@@ -12,6 +12,7 @@ const NAV = [
   { path: '/shared-flows', label: 'Shared Flows',   Icon: IconFlows },
   { section: 'ADMIN' },
   { path: '/kvm',          label: 'Key Value Maps', Icon: IconKVM },
+  { path: '/caches',       label: 'Caches',         Icon: IconCache },
   { path: '/config',       label: 'Configuración',  Icon: IconSettings },
   { section: 'HERRAMIENTAS' },
   { path: '/trace',        label: 'Trace Analyzer', Icon: IconTrace },

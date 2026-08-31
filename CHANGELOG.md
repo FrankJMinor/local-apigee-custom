@@ -124,6 +124,15 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
   tape el resto.
 - Las alertas del dashboard salen del estado real: emulador sin responder, KVM sin cargar en el
   runtime, llaves que el emulador no admite o ninguna revisión desplegada.
+- Pantalla **Caches**, bajo Key Value Maps en el menú: réplica de la pestaña *Environment
+  Configuration → Caches* de Apigee Edge, con edición en línea y guardado de la tabla completa.
+  Los tres tipos de caducidad (`timeoutInSec`, `timeOfDay`, `expiryDate`) con el control que
+  corresponde a cada uno.
+- `APIs/caches.py` y `src/main/apigee/environments/<env>/caches.json`, con la forma que devuelve
+  la API de administración de Edge para poder promoverlo tal cual. El emulador no aplica ese
+  archivo —crea los caches bajo demanda cuando una política los referencia— y la UI lo avisa.
+- `GET|PUT /v1/caches` y la réplica de las rutas de Edge
+  `/v1/organizations/{org}/environments/{env}/caches[/{cache}]`.
 
 ### Cambiado
 - La unicidad de nombres de KVM y de llave pasa a distinguir mayúsculas, como hace el emulador
