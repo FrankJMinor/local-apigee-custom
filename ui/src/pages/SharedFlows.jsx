@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { StatusBadge } from '../components/StatusBadge'
-import { IconRefresh, IconRocket, IconTrash } from '../components/Icons'
+import { IconRefresh, IconRocket, IconTrash, IconX } from '../components/Icons'
 import { NewProxyModal } from '../components/NewProxyModal'
 import { DeleteProxiesModal } from '../components/DeleteProxiesModal'
 import { ARTIFACT_KINDS } from '../utils/importProxyBundle'
@@ -16,6 +16,9 @@ function SharedFlows() {
   const [sharedFlows, setSharedFlows] = useState([])
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
+  // Las casillas solo aparecen al entrar en modo selección: en el uso normal de
+  // la tabla estorban y se marcan sin querer.
+  const [selecting, setSelecting] = useState(false)
   // Nombres marcados para borrar.
   const [selected, setSelected] = useState(() => new Set())
   const [pendingDelete, setPendingDelete] = useState([])
@@ -65,8 +68,13 @@ function SharedFlows() {
     return next
   })
 
-  const handleDeleted = () => {
+  const exitSelection = () => {
+    setSelecting(false)
     setSelected(new Set())
+  }
+
+  const handleDeleted = () => {
+    exitSelection()
     setPendingDelete([])
     loadSharedFlows()
   }
@@ -98,12 +106,34 @@ function SharedFlows() {
             />
           </div>
           <div className={s.tableBarRight}>
-            {selected.size > 0 && (
-              <button className={s.btnDanger} onClick={() => setPendingDelete([...selected])}>
-                <IconTrash size={13} /> Eliminar ({selected.size})
-              </button>
+            {selecting ? (
+              <>
+                <span className={s.countLabel}>{selected.size} seleccionados</span>
+                <button
+                  className={s.btnDanger}
+                  disabled={selected.size === 0}
+                  onClick={() => setPendingDelete([...selected])}
+                >
+                  <IconTrash size={13} /> Eliminar ({selected.size})
+                </button>
+                <button className={s.btnSecondary} onClick={exitSelection}>
+                  <IconX size={13} /> Cancelar
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  className={s.btnSecondary}
+                  onClick={() => setSelecting(true)}
+                  disabled={visibleNames.length === 0}
+                >
+                  Seleccionar
+                </button>
+                <span className={s.countLabel}>
+                  {filtered.length} de {sharedFlows.length} shared flows
+                </span>
+              </>
             )}
-            <span className={s.countLabel}>{filtered.length} de {sharedFlows.length} shared flows</span>
           </div>
         </div>
 
@@ -111,16 +141,18 @@ function SharedFlows() {
           <table className={s.table}>
             <thead>
               <tr>
-                <th className={s.checkCell}>
-                  <input
-                    type="checkbox"
-                    className={s.checkbox}
-                    checked={allVisibleSelected}
-                    onChange={toggleAllVisible}
-                    disabled={visibleNames.length === 0}
-                    aria-label="Seleccionar todos los shared flows visibles"
-                  />
-                </th>
+                {selecting && (
+                  <th className={s.checkCell}>
+                    <input
+                      type="checkbox"
+                      className={s.checkbox}
+                      checked={allVisibleSelected}
+                      onChange={toggleAllVisible}
+                      disabled={visibleNames.length === 0}
+                      aria-label="Seleccionar todos los shared flows visibles"
+                    />
+                  </th>
+                )}
                 <th>Nombre del Flow</th>
                 <th>Revisión</th>
                 <th>Estado</th>
@@ -131,18 +163,23 @@ function SharedFlows() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={7} className={s.empty}>Sin resultados</td></tr>
+                <tr><td colSpan={selecting ? 7 : 6} className={s.empty}>Sin resultados</td></tr>
               ) : filtered.map(row => (
-                <tr key={row.name} className={selected.has(row.name) ? s.rowSelected : ''}>
-                  <td className={s.checkCell}>
-                    <input
-                      type="checkbox"
-                      className={s.checkbox}
-                      checked={selected.has(row.name)}
-                      onChange={() => toggleOne(row.name)}
-                      aria-label={`Seleccionar ${row.name}`}
-                    />
-                  </td>
+                <tr
+                  key={row.name}
+                  className={selecting && selected.has(row.name) ? s.rowSelected : ''}
+                >
+                  {selecting && (
+                    <td className={s.checkCell}>
+                      <input
+                        type="checkbox"
+                        className={s.checkbox}
+                        checked={selected.has(row.name)}
+                        onChange={() => toggleOne(row.name)}
+                        aria-label={`Seleccionar ${row.name}`}
+                      />
+                    </td>
+                  )}
                   <td>
                     <span className={s.nameCell}>
                       <span className={s.dot} style={{ background: getDotColor(row.state) }} />

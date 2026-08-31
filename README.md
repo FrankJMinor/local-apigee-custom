@@ -486,6 +486,10 @@ se muestran, para no marcarlas sin querer—. Con filas marcadas aparecen
 recarga del emulador en vez de encadenar una por KVM. La vista de edición de un
 KVM tiene el mismo modo para sus llaves.
 
+Las tablas de **API Proxies** y **Shared Flows** usan el mismo modo, con
+*Eliminar (n)* pero sin *Eliminar todos*: borrar de golpe todos los proxies de un
+entorno no es una operación que convenga dejar a un clic.
+
 
 ### Alta de proxies desde la UI (+ Nuevo Proxy)
 

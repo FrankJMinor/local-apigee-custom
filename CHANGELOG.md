@@ -153,6 +153,9 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
   proxies salen por el puerto único del runtime, y la pantalla lo recuerda en el pie.
 - `APIGEE_RUNTIME_PUBLIC_URL`: la URL del runtime vista desde el navegador (`localhost:8445`),
   frente a `APIGEE_RUNTIME_URL`, que apunta al contenedor y solo sirve dentro de la red de Docker.
+- Las tablas de **API Proxies** y **Shared Flows** adoptan el mismo modo selección que la de
+  KVM: las casillas solo aparecen al pulsar **Seleccionar**, y con ellas *Eliminar (n)* y
+  *Cancelar*. Antes estaban siempre visibles y se marcaban sin querer.
 
 ### Cambiado
 - La unicidad de nombres de KVM y de llave pasa a distinguir mayúsculas, como hace el emulador

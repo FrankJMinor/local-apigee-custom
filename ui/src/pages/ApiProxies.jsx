@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { StatusBadge } from '../components/StatusBadge'
 import { TagChip } from '../components/TagChip'
-import { IconRefresh, IconRocket, IconTrash } from '../components/Icons'
+import { IconRefresh, IconRocket, IconTrash, IconX } from '../components/Icons'
 import { NewProxyModal } from '../components/NewProxyModal'
 import { DeleteProxiesModal } from '../components/DeleteProxiesModal'
 import { formatDate } from '../utils/format'
@@ -37,6 +37,9 @@ function ApiProxies() {
   const [error, setError]     = useState(null)
   const [search, setSearch]   = useState('')
   const [modalOpen, setModalOpen] = useState(false)
+  // Las casillas solo aparecen al entrar en modo selección: en el uso normal de
+  // la tabla estorban y se marcan sin querer.
+  const [selecting, setSelecting] = useState(false)
   // Nombres marcados para borrar; un proxy puede aparecer en varias filas (revisiones).
   const [selected, setSelected] = useState(() => new Set())
   const [pendingDelete, setPendingDelete] = useState([])
@@ -77,8 +80,13 @@ function ApiProxies() {
     return next
   })
 
-  const handleDeleted = () => {
+  const exitSelection = () => {
+    setSelecting(false)
     setSelected(new Set())
+  }
+
+  const handleDeleted = () => {
+    exitSelection()
     setPendingDelete([])
     load()
   }
@@ -112,17 +120,34 @@ function ApiProxies() {
             />
           </div>
           <div className={s.tableBarRight}>
-            {selected.size > 0 && (
-              <button
-                className={s.btnDanger}
-                onClick={() => setPendingDelete([...selected])}
-              >
-                <IconTrash size={13} /> Eliminar ({selected.size})
-              </button>
+            {selecting ? (
+              <>
+                <span className={s.countLabel}>{selected.size} seleccionados</span>
+                <button
+                  className={s.btnDanger}
+                  disabled={selected.size === 0}
+                  onClick={() => setPendingDelete([...selected])}
+                >
+                  <IconTrash size={13} /> Eliminar ({selected.size})
+                </button>
+                <button className={s.btnSecondary} onClick={exitSelection}>
+                  <IconX size={13} /> Cancelar
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  className={s.btnSecondary}
+                  onClick={() => setSelecting(true)}
+                  disabled={visibleNames.length === 0}
+                >
+                  Seleccionar
+                </button>
+                <span className={s.countLabel}>
+                  {loading ? '…' : `${filtered.length} de ${rows.length} proxies`}
+                </span>
+              </>
             )}
-            <span className={s.countLabel}>
-              {loading ? '…' : `${filtered.length} de ${rows.length} proxies`}
-            </span>
           </div>
         </div>
 
@@ -134,16 +159,18 @@ function ApiProxies() {
             <table className={s.table}>
               <thead>
                 <tr>
-                  <th className={s.checkCell}>
-                    <input
-                      type="checkbox"
-                      className={s.checkbox}
-                      checked={allVisibleSelected}
-                      onChange={toggleAllVisible}
-                      disabled={visibleNames.length === 0}
-                      aria-label="Seleccionar todos los proxies visibles"
-                    />
-                  </th>
+                  {selecting && (
+                    <th className={s.checkCell}>
+                      <input
+                        type="checkbox"
+                        className={s.checkbox}
+                        checked={allVisibleSelected}
+                        onChange={toggleAllVisible}
+                        disabled={visibleNames.length === 0}
+                        aria-label="Seleccionar todos los proxies visibles"
+                      />
+                    </th>
+                  )}
                   <th>Nombre del Proxy</th>
                   <th>Revisión</th>
                   <th>Estado</th>
@@ -154,18 +181,23 @@ function ApiProxies() {
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={7} className={s.empty}>Sin resultados</td></tr>
+                  <tr><td colSpan={selecting ? 7 : 6} className={s.empty}>Sin resultados</td></tr>
                 ) : filtered.map(row => (
-                  <tr key={`${row.name}-${row.revision}`} className={selected.has(row.name) ? s.rowSelected : ''}>
-                    <td className={s.checkCell}>
-                      <input
-                        type="checkbox"
-                        className={s.checkbox}
-                        checked={selected.has(row.name)}
-                        onChange={() => toggleOne(row.name)}
-                        aria-label={`Seleccionar ${row.name}`}
-                      />
-                    </td>
+                  <tr
+                    key={`${row.name}-${row.revision}`}
+                    className={selecting && selected.has(row.name) ? s.rowSelected : ''}
+                  >
+                    {selecting && (
+                      <td className={s.checkCell}>
+                        <input
+                          type="checkbox"
+                          className={s.checkbox}
+                          checked={selected.has(row.name)}
+                          onChange={() => toggleOne(row.name)}
+                          aria-label={`Seleccionar ${row.name}`}
+                        />
+                      </td>
+                    )}
                     <td>
                       <span className={s.nameCell}>
                         <span className={s.dot} style={{ background: getDotColor(row.state) }} />
