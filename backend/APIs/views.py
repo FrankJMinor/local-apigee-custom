@@ -19,7 +19,7 @@ from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from . import bundles, caches, dashboard, edge, emulator, flowhooks, kvms, trace
+from . import bundles, caches, dashboard, edge, emulator, flowhooks, kvms, trace, virtualhosts
 from .services import (
     get_current_revision,
     get_latest_revision_path,
@@ -2100,3 +2100,91 @@ class FlowHookView(APIView):
             )
 
         return Response({**catalog, "deployed": True, **deployment})
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Virtual hosts del environment
+#
+# Como los caches, el emulador no aplica esto: en local todos los proxies salen
+# por el puerto único del runtime. Sirve para documentar el mapa de dominios y
+# puertos de Edge y para saber a qué URL local corresponde cada una.
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+class VirtualHostView(APIView):
+    """Virtual hosts del environment: consulta y guardado de la tabla completa."""
+
+    @extend_schema(
+        summary="Lista los virtual hosts configurados en el environment",
+        description=(
+            "Lee `src/main/apigee/environments/<env>/virtualhosts.json` y añade la "
+            "URL que forma cada alias.\n\n"
+            "El emulador **no** aplica esta configuración: su contrato compilado no "
+            "tiene siquiera un campo para virtual hosts, y un `<VirtualHost>` dentro "
+            "del `<HTTPProxyConnection>` de un proxy se ignora. En local todos los "
+            "proxies responden en `localRuntimeUrl`, sea cual sea el virtual host."
+        ),
+        parameters=[OpenApiParameter("environment", str, description="Environment a consultar.")],
+        responses={200: dict, 400: dict},
+    )
+    def get(self, request):
+        environment = request.query_params.get("environment") or settings.APIGEE_ENVIRONMENT
+
+        try:
+            return Response(virtualhosts.catalog(environment))
+        except virtualhosts.VirtualHostError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="Guarda la tabla completa de virtual hosts",
+        description=(
+            "Equivalente al *Save* de la consola de Edge: recibe la lista entera y la "
+            "reemplaza. Se valida todo antes de escribir, así que una fila mal puesta "
+            "no deja el archivo a medias.\n\n"
+            "Los alias admiten pegarse como URL completa: se queda solo con el host."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "virtualHosts": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "port": {"type": "string"},
+                                "hostAliases": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                                "ssl": {"type": "boolean", "default": True},
+                            },
+                            "required": ["name", "port", "hostAliases"],
+                        },
+                    }
+                },
+                "required": ["virtualHosts"],
+            }
+        },
+        responses={200: dict, 400: dict},
+    )
+    def put(self, request):
+        payload = request.data if isinstance(request.data, dict) else {}
+        environment = payload.get("environment") or settings.APIGEE_ENVIRONMENT
+        rows = payload.get("virtualHosts")
+
+        if not isinstance(rows, list):
+            return Response(
+                {"error": "Envía la lista completa en 'virtualHosts'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            virtualhosts.replace_all(rows, environment)
+        except virtualhosts.VirtualHostError as exc:
+            logger.warning(f"Guardado de virtual hosts rechazado: {exc}")
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        catalog = virtualhosts.catalog(environment)
+        return Response({**catalog, "saved": len(catalog["virtualHosts"])})

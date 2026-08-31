@@ -10,6 +10,7 @@ import KeyValueMaps from './pages/KeyValueMaps'
 import KeyValueMapDetail from './pages/KeyValueMapDetail'
 import Caches from './pages/Caches'
 import FlowHooks from './pages/FlowHooks'
+import VirtualHosts from './pages/VirtualHosts'
 import Configuracion  from './pages/Configuracion'
 import TraceAnalyzer  from './pages/TraceAnalyzer'
 
@@ -33,6 +34,7 @@ function App() {
         <Route path="/kvm/:kvmName" element={<KeyValueMapDetail />} />
         <Route path="/caches"       element={<Caches />} />
         <Route path="/flow-hooks"   element={<FlowHooks />} />
+        <Route path="/virtual-hosts" element={<VirtualHosts />} />
         <Route path="/config"       element={<Configuracion />} />
         <Route path="/trace"        element={<TraceAnalyzer />} />
         <Route path="*"             element={<Navigate to="/" replace />} />

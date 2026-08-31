@@ -1,0 +1,32 @@
+[
+  {
+    "name": "default",
+    "port": "9001",
+    "hostAliases": [
+      "api-dev.svamx.com"
+    ],
+    "sslInfo": {
+      "enabled": "true"
+    }
+  },
+  {
+    "name": "defaultnb",
+    "port": "9003",
+    "hostAliases": [
+      "api-nb-dev.svamx.com"
+    ],
+    "sslInfo": {
+      "enabled": "true"
+    }
+  },
+  {
+    "name": "defaultsb",
+    "port": "9001",
+    "hostAliases": [
+      "api-sb-dev.svamx.com"
+    ],
+    "sslInfo": {
+      "enabled": "true"
+    }
+  }
+]

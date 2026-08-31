@@ -56,6 +56,7 @@ from APIs.views import (
     SharedFlowDetailView,
     SharedFlowFileListView,
     SharedFlowFileUpdateView,
+    VirtualHostView,
 )
 
 urlpatterns = [
@@ -127,6 +128,10 @@ urlpatterns = [
     # A diferencia de los caches, el emulador sí compila esto en el contrato,
     # así que guardar implica redesplegar.
     path("v1/flowhooks", FlowHookView.as_view()),
+    # ── Virtual hosts del environment ─────────────────────────────────────────
+    # El emulador no los aplica: en local todo sale por el puerto único del
+    # runtime. Documentan el mapa de dominios y puertos de Edge.
+    path("v1/virtualhosts", VirtualHostView.as_view()),
     # ── Key Value Maps ────────────────────────────────────────────────────────
     # Catálogo que consume la tabla de la UI: los dos scopes en una llamada, ya
     # cruzados con los KVM que el contenedor del emulador tiene cargados.

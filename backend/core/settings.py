@@ -155,15 +155,19 @@ APIGEE_EMULATOR_TIMEOUT = int(os.environ.get("APIGEE_EMULATOR_TIMEOUT", "120"))
 APIGEE_RUNTIME_URL = os.environ.get("APIGEE_RUNTIME_URL", "http://apigee-dev:8998")
 APIGEE_RUNTIME_TIMEOUT = int(os.environ.get("APIGEE_RUNTIME_TIMEOUT", "30"))
 
+# La misma puerta, pero vista desde el navegador. APIGEE_RUNTIME_URL apunta al
+# contenedor y solo sirve dentro de la red de Docker; esta es la que docker-compose
+# publica en el host, y la que hay que enseñar cuando la UI muestra una URL para
+# copiar y pegar.
+APIGEE_RUNTIME_PUBLIC_URL = os.environ.get("APIGEE_RUNTIME_PUBLIC_URL", "http://localhost:8445")
+
 # Cada cuánto sondea el backend al emulador mientras hay un stream de trace
 # abierto. El emulador no notifica nada por su cuenta: solo expone el GET.
 APIGEE_TRACE_POLL_SECONDS = float(os.environ.get("APIGEE_TRACE_POLL_SECONDS", "1.0"))
 
 # Tope de vida de un stream SSE, para que un cliente que se va no deje el hilo
 # del servidor de desarrollo ocupado indefinidamente.
-APIGEE_TRACE_STREAM_MAX_SECONDS = int(
-    os.environ.get("APIGEE_TRACE_STREAM_MAX_SECONDS", "660")
-)
+APIGEE_TRACE_STREAM_MAX_SECONDS = int(os.environ.get("APIGEE_TRACE_STREAM_MAX_SECONDS", "660"))
 
 # ── Apigee Edge remoto ──────────────────────────────────────────────
 # Environments de Edge desde los que se pueden traer KVM al emulador local.

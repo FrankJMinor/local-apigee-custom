@@ -101,6 +101,41 @@ Para simular KVMs de la nube, se debe crear el archivo `./environments/apigee-de
 ]
 ```
 
+### Virtual Hosts
+
+Réplica de la pestaña *Environment Configuration → Virtual Hosts* de Edge, con
+nombre, puerto, alias y SSL editables. La consola de Edge no ofrece botón de
+edición ahí, pero los valores sí se pueden cambiar, así que la tabla es editable
+y se guarda entera con un botón.
+
+Cada fila muestra la URL que resulta de sus alias, y se actualiza mientras
+escribes:
+
+```
+default    :9001  https://api-dev.svamx.com/<basepath>
+defaultnb  :9003  https://api-nb-dev.svamx.com/<basepath>
+defaultsb  :9001  https://api-sb-dev.svamx.com/<basepath>
+```
+
+Se guarda en `src/main/apigee/environments/<env>/virtualhosts.json` con la forma
+de la API de Edge (`name`, `port`, `hostAliases`, `sslInfo.enabled`).
+
+**El emulador local no monta estos puertos**, y por eso el pie de la tabla
+recuerda la URL local. Comprobado de dos formas:
+
+* El `env.json` del contrato compilado no tiene siquiera un campo para virtual
+  hosts: lleva deployments, resources, flowhooks, targets, keystores,
+  dataCollectors, debugMask y featureFlags, y nada más.
+* Un `<VirtualHost>` dentro del `<HTTPProxyConnection>` de un proxy se ignora:
+  el despliegue compila igual y el endpoint sigue enrutado en el puerto único.
+
+O sea, en local **todos los proxies responden en `http://localhost:8445/<basepath>`**
+(configurable con `APIGEE_RUNTIME_PUBLIC_URL`), sea cual sea el virtual host. La
+pantalla sirve para documentar el mapa real de Edge en el repositorio y para
+traducir cada URL de Edge a su equivalente local.
+
+Los alias se pueden pegar como URL completa: se queda solo con el host.
+
 ### Flow Hooks
 
 Réplica de la pestaña *Environment Configuration → Flow Hooks* de Edge, bajo

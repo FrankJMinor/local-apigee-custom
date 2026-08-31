@@ -143,6 +143,16 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
   tumba el despliegue con un 500 y un shared flow no desplegado lo rechaza con
   `SharedFlowDoesNotExist`. Si el despliegue falla igual, se revierte el archivo y se redespliega
   el contrato anterior.
+- Pantalla **Virtual Hosts**, en el grupo ADMIN: nombre, puerto, alias y SSL editables, con la
+  URL resultante de cada alias calculada en vivo. La consola de Edge no ofrece botón de edición
+  en esa pestaña, pero los valores sí se editan.
+- `APIs/virtualhosts.py`, `GET|PUT /v1/virtualhosts` y
+  `src/main/apigee/environments/<env>/virtualhosts.json` con la forma de la API de Edge.
+- El emulador no monta esos puertos: su contrato no tiene campo para virtual hosts y un
+  `<VirtualHost>` dentro del `<HTTPProxyConnection>` de un proxy se ignora. En local todos los
+  proxies salen por el puerto único del runtime, y la pantalla lo recuerda en el pie.
+- `APIGEE_RUNTIME_PUBLIC_URL`: la URL del runtime vista desde el navegador (`localhost:8445`),
+  frente a `APIGEE_RUNTIME_URL`, que apunta al contenedor y solo sirve dentro de la red de Docker.
 
 ### Cambiado
 - La unicidad de nombres de KVM y de llave pasa a distinguir mayúsculas, como hace el emulador
