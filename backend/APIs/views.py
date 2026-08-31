@@ -19,7 +19,7 @@ from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from . import bundles, caches, dashboard, edge, emulator, kvms, trace
+from . import bundles, caches, dashboard, edge, emulator, flowhooks, kvms, trace
 from .services import (
     get_current_revision,
     get_latest_revision_path,
@@ -2005,3 +2005,98 @@ class CacheDetailView(APIView):
             return _cache_error(exc)
 
         return Response({"cache": removed})
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Flow hooks del environment
+#
+# A diferencia de los caches, esta configuración sí la compila el emulador
+# dentro del contrato, así que guardarla implica redesplegar.
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+class FlowHookView(APIView):
+    """Los cuatro flow hooks del environment: consulta y guardado."""
+
+    @extend_schema(
+        summary="Lista los flow hooks y los shared flows que se pueden enganchar",
+        description=(
+            "Devuelve los cuatro puntos de enganche —asignados o no— y los shared "
+            "flows desplegados en el emulador, que son los únicos que el contrato "
+            "acepta.\n\n"
+            "Un gancho que apunta a un shared flow que ya no está desplegado llega "
+            "marcado con `missing`: el archivo lo conserva, pero el próximo "
+            "despliegue lo rechazaría."
+        ),
+        parameters=[OpenApiParameter("environment", str, description="Environment a consultar.")],
+        responses={200: dict, 400: dict},
+    )
+    def get(self, request):
+        environment = request.query_params.get("environment") or settings.APIGEE_ENVIRONMENT
+
+        try:
+            return Response(flowhooks.catalog(environment))
+        except flowhooks.FlowHookError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="Guarda los flow hooks y redespliega el contrato",
+        description=(
+            "Escribe `src/main/apigee/environments/<env>/flowhooks.json` y lanza el "
+            "despliegue, porque el emulador aplica esta configuración de verdad.\n\n"
+            "Se valida antes de tocar el disco: un punto de enganche inventado tumba "
+            "el despliegue con un 500 del emulador y un shared flow inexistente lo "
+            "rechaza con un 400. Si aun así falla, el archivo vuelve a su estado "
+            "anterior y se redespliega."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "flowHooks": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string",
+                                    "enum": list(flowhooks.HOOK_NAMES),
+                                },
+                                "sharedFlow": {
+                                    "type": "string",
+                                    "description": "Vacío desasigna el gancho.",
+                                },
+                                "continueOnError": {"type": "boolean", "default": False},
+                            },
+                            "required": ["name"],
+                        },
+                    }
+                },
+                "required": ["flowHooks"],
+            }
+        },
+        responses={200: dict, 400: dict, 502: dict},
+    )
+    def put(self, request):
+        payload = request.data if isinstance(request.data, dict) else {}
+        environment = payload.get("environment") or settings.APIGEE_ENVIRONMENT
+        hooks = payload.get("flowHooks")
+
+        if not isinstance(hooks, list):
+            return Response(
+                {"error": "Envía los cuatro ganchos en 'flowHooks'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            catalog, deployment = flowhooks.save_hooks(hooks, environment)
+        except flowhooks.FlowHookError as exc:
+            logger.warning(f"Guardado de flow hooks rechazado: {exc}")
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except emulator.EmulatorError as exc:
+            return Response(
+                {"error": exc.message, "detail": exc.detail, "reverted": True},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response({**catalog, "deployed": True, **deployment})

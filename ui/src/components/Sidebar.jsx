@@ -13,6 +13,7 @@ const NAV = [
   { section: 'ADMIN' },
   { path: '/kvm',          label: 'Key Value Maps', Icon: IconKVM },
   { path: '/caches',       label: 'Caches',         Icon: IconCache },
+  { path: '/flow-hooks',   label: 'Flow Hooks',     Icon: IconFlows },
   { path: '/config',       label: 'Configuración',  Icon: IconSettings },
   { section: 'HERRAMIENTAS' },
   { path: '/trace',        label: 'Trace Analyzer', Icon: IconTrace },

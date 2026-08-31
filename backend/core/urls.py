@@ -34,6 +34,7 @@ from APIs.views import (
     EdgeEnvironmentsView,
     EmulatorDeployView,
     EmulatorStatusView,
+    FlowHookView,
     KeyValueMapBulkDeleteView,
     KeyValueMapCatalogView,
     KeyValueMapDetailView,
@@ -122,6 +123,10 @@ urlpatterns = [
         "v1/organizations/<str:org>/environments/<str:env>/caches/<str:cache_name>",
         CacheDetailView.as_view(),
     ),
+    # ── Flow hooks del environment ────────────────────────────────────────────
+    # A diferencia de los caches, el emulador sí compila esto en el contrato,
+    # así que guardar implica redesplegar.
+    path("v1/flowhooks", FlowHookView.as_view()),
     # ── Key Value Maps ────────────────────────────────────────────────────────
     # Catálogo que consume la tabla de la UI: los dos scopes en una llamada, ya
     # cruzados con los KVM que el contenedor del emulador tiene cargados.

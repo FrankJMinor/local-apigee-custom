@@ -101,6 +101,45 @@ Para simular KVMs de la nube, se debe crear el archivo `./environments/apigee-de
 ]
 ```
 
+### Flow Hooks
+
+Réplica de la pestaña *Environment Configuration → Flow Hooks* de Edge, bajo
+**Flow Hooks** en el menú: los cuatro puntos de enganche y, en cada uno, un
+desplegable con los shared flows **desplegados en el emulador**.
+
+| Punto de enganche | Cuándo corre |
+| --- | --- |
+| `PreProxyFlowHook` | antes del ProxyEndpoint |
+| `PreTargetFlowHook` | antes del TargetEndpoint |
+| `PostTargetFlowHook` | después del TargetEndpoint |
+| `PostProxyFlowHook` | después del ProxyEndpoint |
+
+Se guarda en `src/main/apigee/environments/<env>/flowhooks.json`, un mapa
+indexado por punto de enganche. Un gancho sin asignar no aparece en el archivo:
+
+```json
+{
+  "PreProxyFlowHook": { "sharedFlow": "sf-test", "continueOnError": false }
+}
+```
+
+**Aquí el emulador sí aplica la configuración**, al revés que con los caches:
+`ApigeeSource` lee `flowhooks.json` y lo compila dentro del contrato. Por eso
+guardar **redespliega el workspace**, y verificado en la traza: el paso
+`flowhook sf-test` aparece justo después de `PROXY_REQ_FLOW`.
+
+Los dos fallos posibles son caros, así que se validan antes de tocar el disco:
+
+* Un punto de enganche inventado tumba el despliegue con un HTTP 500 del
+  emulador (`No enum constant ... FlowHookPoint.X`).
+* Un shared flow que no esté desplegado hace que el emulador rechace el contrato
+  entero con `SharedFlowDoesNotExist`.
+
+Si aun así el despliegue falla, el archivo vuelve a su estado anterior y se
+redespliega el contrato que funcionaba. Un gancho que apunte a un shared flow ya
+borrado se conserva en el archivo, pero la UI lo marca en ámbar y avisa de que el
+próximo despliegue lo rechazaría.
+
 ### Caches del environment
 
 Réplica de la pestaña *Environment Configuration → Caches* de Apigee Edge, bajo

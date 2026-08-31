@@ -9,6 +9,7 @@ import SharedFlowDetailPage from './pages/SharedFlowDetailPage';
 import KeyValueMaps from './pages/KeyValueMaps'
 import KeyValueMapDetail from './pages/KeyValueMapDetail'
 import Caches from './pages/Caches'
+import FlowHooks from './pages/FlowHooks'
 import Configuracion  from './pages/Configuracion'
 import TraceAnalyzer  from './pages/TraceAnalyzer'
 
@@ -31,6 +32,7 @@ function App() {
         <Route path="/kvm"          element={<KeyValueMaps />} />
         <Route path="/kvm/:kvmName" element={<KeyValueMapDetail />} />
         <Route path="/caches"       element={<Caches />} />
+        <Route path="/flow-hooks"   element={<FlowHooks />} />
         <Route path="/config"       element={<Configuracion />} />
         <Route path="/trace"        element={<TraceAnalyzer />} />
         <Route path="*"             element={<Navigate to="/" replace />} />

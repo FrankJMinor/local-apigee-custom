@@ -133,6 +133,16 @@ Todas las versiones y cambios relevantes del proyecto se documentan aquí siguie
   archivo —crea los caches bajo demanda cuando una política los referencia— y la UI lo avisa.
 - `GET|PUT /v1/caches` y la réplica de las rutas de Edge
   `/v1/organizations/{org}/environments/{env}/caches[/{cache}]`.
+- Pantalla **Flow Hooks**, en el grupo ADMIN: los cuatro puntos de enganche con un desplegable
+  de los shared flows desplegados en el emulador, y guardado que escribe
+  `src/main/apigee/environments/<env>/flowhooks.json`.
+- `APIs/flowhooks.py` y `GET|PUT /v1/flowhooks`. A diferencia de los caches, el emulador sí
+  compila esta configuración dentro del contrato, así que guardar redespliega; verificado en la
+  traza, donde el paso `flowhook` aparece tras `PROXY_REQ_FLOW`.
+- Se valida antes de escribir porque los dos fallos son caros: un punto de enganche inventado
+  tumba el despliegue con un 500 y un shared flow no desplegado lo rechaza con
+  `SharedFlowDoesNotExist`. Si el despliegue falla igual, se revierte el archivo y se redespliega
+  el contrato anterior.
 
 ### Cambiado
 - La unicidad de nombres de KVM y de llave pasa a distinguir mayúsculas, como hace el emulador
